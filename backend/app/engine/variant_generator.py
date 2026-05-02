@@ -31,18 +31,19 @@ def _cta_for(
     fatigue_score: float,
     has_strong_offer: bool,
     estimated_customers: int,
+    tone_voice: str = "",
 ) -> tuple[str, str]:
     if trigger_type == "rating_dip":
-        return "recover_trust", f"Run {promo_pct}% trust-recovery campaign to improve reviews now?"
+        return "recover_trust", f"Run ₹{promo_pct} trust-recovery campaign to improve reviews now?"
     if fatigue_score > 0.6:
-        return "soft_nudge", f"Run a low-pressure {promo_pct}% recovery test today?"
+        return "soft_nudge", f"Run a low-pressure ₹{promo_pct} recovery test today?"
     if trigger_type == "spike":
-        return "push_now", f"Push {promo_pct}% offer to {estimated_customers} users now?"
+        return "push_now", f"Push ₹{promo_pct} offer to {estimated_customers} users now?"
     if trigger_type == "drop":
-        return "recover_drop", f"Run {promo_pct}% boost to recover orders now?"
+        return "recover_drop", f"Run ₹{promo_pct} boost to recover orders now?"
     if has_strong_offer:
-        return "activate_offer", f"Activate {promo_pct}% offer for today?"
-    return "soft_nudge", f"Run a low-pressure {promo_pct}% recovery test today?"
+        return "activate_offer", f"Activate ₹{promo_pct} offer for today?"
+    return "soft_nudge", f"Run a low-pressure ₹{promo_pct} recovery test today?"
 
 
 def _line2(priority: str, city: str, trigger_label: str) -> str:
@@ -76,8 +77,18 @@ def generate_variants(
         fused.fatigue_score,
         has_strong_offer,
         plan.estimated_customers,
+        tone_voice=tone.voice,
     )
     message_type = _message_type_for(strategy_type)
+
+    # Category-specific tone applied to line1 wording
+    TONE_LINE1: dict[str, str] = {
+        "sharp-growth":     f"{plan.estimated_customers} hungry buyers in {ctx.city} are ready to order {ctx.category} today.",
+        "coach-driven":     f"{plan.estimated_customers} members in {ctx.city} are ready to book a session today.",
+        "premium-friendly": f"{plan.estimated_customers} style-seekers in {ctx.city} are looking for a slot today.",
+        "clinical-trust":   f"{plan.estimated_customers} patients in {ctx.city} need a trusted {ctx.category} appointment today.",
+        "care-urgent":      f"{plan.estimated_customers} customers in {ctx.city} need a refill or care visit today.",
+    }
 
     if ctx.trigger_type == "rating_dip":
         line1_variants = [
@@ -92,8 +103,9 @@ def generate_variants(
             f"{plan.estimated_customers} local buyers acted on this signal today.",
         ]
     else:
+        tone_line = TONE_LINE1.get(tone.voice, f"{plan.estimated_customers} nearby buyers are ready today.")
         line1_variants = [
-            f"{plan.estimated_customers} nearby buyers are ready today.",
+            tone_line,
             f"{plan.estimated_customers} people searched for {ctx.category} nearby today.",
             f"{plan.estimated_customers} nearby users can generate ₹{estimated_value} today.",
         ]

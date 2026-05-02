@@ -10,7 +10,7 @@ from app.engine.strategy_engine import classify_cta_type, decide_strategy
 from app.engine.suppression import build_suppression_key
 from app.engine.trigger_intelligence import infer_trigger
 from app.engine.variant_generator import enforce_currency, enforce_message_rules, generate_variants
-from app.schemas import ComposeRequest, ComposeResponse
+from app.schemas import ComposeRequest, ComposeResponse, RuleTrace
 from app.store.memory_store import state
 
 
@@ -67,12 +67,16 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
 
     rationale = build_rationale(ctx, trig, fused, plan, strategy, cta_type, best.total_score)
 
-    # Build rule trace for transparency
+    # Build structured rule trace for transparency
     deviation_pct = round((ctx.trigger_ratio - 1.0) * 100, 1)
-    deviation_label = f"+{deviation_pct}%" if deviation_pct >= 0 else f"{deviation_pct}%"
-    rule_trace = (
-        f"{ctx.trigger_type} → {fused.dominant_signal}_signal → {plan.priority} → {strategy} "
-        f"[deviation {deviation_label}, intent {fused.intent_score}, urgency {fused.urgency_score}]"
+    rule_trace = RuleTrace(
+        trigger_type=ctx.trigger_type,
+        dominant_signal=fused.dominant_signal,
+        priority=plan.priority,
+        strategy=strategy,
+        deviation_pct=deviation_pct,
+        intent_score=fused.intent_score,
+        urgency_score=fused.urgency_score,
     )
 
     # Record interaction for memory/analytics
