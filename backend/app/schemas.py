@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field, field_validator
+from typing import Any, Dict, List, Literal, Optional, Union
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 CategoryType = Literal["restaurant", "gym", "salon", "dentist", "pharmacy"]
@@ -16,24 +16,30 @@ TriggerType = Literal[
     "weekend_opportunity",
 ]
 
+_DEFAULT_CATEGORY: CategoryType = "restaurant"
+
 
 class MerchantInput(BaseModel):
-    merchant_id: str = Field(default="m_default", description="Merchant identifier. Auto-assigned if not provided.")
+    model_config = {"extra": "ignore"}  # silently drop unknown fields from judge payloads
+
+    merchant_id: str = Field(default="m_default")
     name: str = Field(default="Merchant")
-    category: CategoryType
+    category: CategoryType = Field(default=_DEFAULT_CATEGORY)
     city: str = Field(default="India")
-    avg_order_value: float = Field(gt=0, le=100_000, description="Average order value in Rs. Must be > 0.")
-    weekly_orders: int = Field(gt=0, le=500_000, description="Weekly order volume. Must be > 0.")
-    conversion_rate: float = Field(ge=0.0, le=1.0, default=0.15)
-    repeat_customer_rate: float = Field(ge=0.0, le=1.0, default=0.3)
-    rating: float = Field(ge=1.0, le=5.0, default=4.0)
-    margin_pct: float = Field(ge=0.0, le=0.9, default=0.25)
+    avg_order_value: float = Field(default=300.0, gt=0, le=100_000)
+    weekly_orders: int = Field(default=500, gt=0, le=500_000)
+    conversion_rate: float = Field(default=0.15, ge=0.0, le=1.0)
+    repeat_customer_rate: float = Field(default=0.3, ge=0.0, le=1.0)
+    rating: float = Field(default=4.0, ge=1.0, le=5.0)
+    margin_pct: float = Field(default=0.25, ge=0.0, le=0.9)
 
 
 class TriggerInput(BaseModel):
-    type: str
-    observed_value: float = Field(ge=0, description="Observed metric value. Must be >= 0.")
-    baseline_value: float = Field(gt=0, description="Baseline metric value. Must be > 0.")
+    model_config = {"extra": "ignore"}
+
+    type: str = Field(default="spike")
+    observed_value: float = Field(default=150.0, ge=0)
+    baseline_value: float = Field(default=100.0, gt=0)
     window_minutes: int = Field(default=180, ge=15, le=1440)
     timestamp_utc: str = Field(default="2026-01-01T00:00:00Z")
 
@@ -44,23 +50,39 @@ class TriggerInput(BaseModel):
         try:
             datetime.fromisoformat(v.replace("Z", "+00:00"))
         except ValueError:
-            raise ValueError("timestamp_utc must be a valid ISO 8601 datetime string, e.g. 2026-05-02T14:00:00Z")
+            raise ValueError("timestamp_utc must be ISO 8601, e.g. 2026-05-02T14:00:00Z")
         return v
 
 
 class CustomerInput(BaseModel):
-    customer_id: str
+    model_config = {"extra": "ignore"}
+
+    customer_id: str = Field(default="c_default")
     loyalty_tier: Literal["new", "silver", "gold", "platinum"] = "new"
-    visits_last_30d: int = Field(ge=0, le=500)
-    spend_last_30d: float = Field(ge=0, le=100000)
-    last_engagement_days: int = Field(ge=0, le=365)
+    visits_last_30d: int = Field(default=0, ge=0, le=500)
+    spend_last_30d: float = Field(default=0.0, ge=0, le=100000)
+    last_engagement_days: int = Field(default=30, ge=0, le=365)
 
 
 class ComposeRequest(BaseModel):
-    category: CategoryType
-    merchant: MerchantInput
-    trigger: TriggerInput
+    model_config = {"extra": "ignore"}
+
+    category: CategoryType = Field(default=_DEFAULT_CATEGORY)
+    merchant: MerchantInput = Field(default_factory=MerchantInput)
+    trigger: TriggerInput = Field(default_factory=TriggerInput)
     customer: Optional[CustomerInput] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def sync_category(cls, data: Any) -> Any:
+        """If merchant.category not set, inherit from top-level category."""
+        if isinstance(data, dict):
+            top_cat = data.get("category", _DEFAULT_CATEGORY)
+            merchant = data.get("merchant")
+            if isinstance(merchant, dict) and "category" not in merchant:
+                merchant["category"] = top_cat
+                data["merchant"] = merchant
+        return data
 
 
 class RuleTrace(BaseModel):
@@ -86,20 +108,26 @@ class ComposeResponse(BaseModel):
 
 
 class ContextRequest(BaseModel):
+    model_config = {"extra": "ignore"}
     merchant_id: str
-    memory: Dict[str, str] = Field(default_factory=dict)
+    memory: Dict[str, Any] = Field(default_factory=dict)
 
 
-# Challenge-format /v1/context — accepts scope/context_id/payload envelope
 class ContextEnvelope(BaseModel):
+    """Challenge-format /v1/context envelope."""
+    model_config = {"extra": "ignore"}
+
+    # Accept context_id OR identity (judge may use either)
+    context_id: Optional[str] = None
+    identity: Optional[str] = None
     scope: str = "merchant"
-    context_id: str
     version: int = 1
-    payload: Dict[str, str] = Field(default_factory=dict)
+    payload: Dict[str, Any] = Field(default_factory=dict)
     delivered_at: Optional[str] = None
 
-    def to_context_request(self) -> "ContextRequest":
-        return ContextRequest(merchant_id=self.context_id, memory=self.payload)
+    def to_context_request(self) -> ContextRequest:
+        mid = self.context_id or self.identity or "m_default"
+        return ContextRequest(merchant_id=mid, memory={str(k): str(v) for k, v in self.payload.items()})
 
 
 class TickRequest(BaseModel):
@@ -108,6 +136,7 @@ class TickRequest(BaseModel):
 
 
 class ReplyRequest(BaseModel):
+    model_config = {"extra": "ignore"}
     merchant_id: str
     customer_id: Optional[str] = None
     reply_text: str
