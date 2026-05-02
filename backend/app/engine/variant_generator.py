@@ -28,6 +28,13 @@ def enforce_message_rules(msg: str) -> str:
 # Urgency closers — rotated deterministically to avoid "now?" overuse
 _CLOSERS = ["now?", "right away?", "today?"]
 
+# Demand phrase pool — keyed by merchant_id hash for natural variation without randomness
+_DEMAND_PHRASES = ["high-intent buyers", "nearby customers", "ready-to-order users"]
+
+
+def _demand_phrase(merchant_id: str) -> str:
+    return _DEMAND_PHRASES[hash(merchant_id) % len(_DEMAND_PHRASES)]
+
 # Category-specific action verbs for CTA precision
 _CTA_VERB: dict[str, str] = {
     "sharp-growth":     "send them a ₹{p} off deal",
@@ -39,15 +46,21 @@ _CTA_VERB: dict[str, str] = {
 }
 
 
-def _discount_amount(aov: float, promo_pct: int) -> int:
-    """Convert promo_pct% of AOV to a clean rupee discount rounded to nearest ₹5."""
-    raw = aov * max(promo_pct, 15) / 100  # floor at 15% so discount is never trivially small
-    return max(5, int(round(raw / 5) * 5))  # round to nearest ₹5, minimum ₹5
+def _discount_amount(aov: float, promo_pct: int, strategy_type: str = "info") -> int:
+    """Rupee discount = AOV × strategy-aware rate, rounded to nearest ₹5."""
+    if strategy_type in {"urgency", "social_proof"}:   # capture-demand: lighter touch
+        rate = max(promo_pct, 8) / 100
+    elif strategy_type in {"discount", "trust_recovery", "info"}:  # recovery: stronger pull
+        rate = max(promo_pct, 12) / 100
+    else:
+        rate = max(promo_pct, 15) / 100
+    raw = aov * rate
+    return max(5, int(round(raw / 5) * 5))
 
 
 def _cta_for(
     trigger_type: str,
-    discount: int,           # rupee discount amount (AOV × promo_pct), NOT raw promo_pct
+    discount: int,
     fatigue_score: float,
     has_strong_offer: bool,
     estimated_customers: int,
@@ -55,16 +68,29 @@ def _cta_for(
     strategy_type: str = "info",
     intent_score: int = 50,
     tone_voice: str = "neutral",
+    merchant_id: str = "m_default",
 ) -> tuple[str, str]:
     closer = _CLOSERS[cta_variant % 3]
     verb_tpl = _CTA_VERB.get(tone_voice, "send them a ₹{p} off deal")
     verb = verb_tpl.replace("{p}", str(discount))
+    # CTA phrase pool — deterministic pick by strategy + merchant_id
+    _cta_pool_idx = hash(strategy_type + merchant_id) % 3
 
     if trigger_type == "rating_dip":
-        return "recover_trust", f"Want me to run a ₹{discount} off trust-recovery campaign {closer}"
+        _pool = [
+            f"Want me to run a ₹{discount} off trust-recovery campaign {closer}",
+            f"Should I activate a ₹{discount} off recovery offer to rebuild trust {closer}",
+            f"Want me to push a ₹{discount} off deal to win back confidence {closer}",
+        ]
+        return "recover_trust", _pool[_cta_pool_idx]
 
     if fatigue_score > 0.6:
-        return "soft_nudge", f"Want me to run a ₹{discount} off recovery offer today?"
+        _pool = [
+            f"Want me to run a ₹{discount} off recovery offer today?",
+            f"Should I send a ₹{discount} off deal to re-engage them today?",
+            f"Want me to activate a ₹{discount} off offer to bring them back?",
+        ]
+        return "soft_nudge", _pool[_cta_pool_idx]
 
     if trigger_type == "spike":
         _variants = [
@@ -83,7 +109,12 @@ def _cta_for(
         return "recover_drop", _variants[cta_variant % 3]
 
     if trigger_type == "low_repeat_rate":
-        return "recall", f"Want me to remind them with a ₹{discount} off offer today?"
+        _pool = [
+            f"Want me to remind them with a ₹{discount} off offer today?",
+            f"Should I send a ₹{discount} off loyalty deal to bring them back?",
+            f"Want me to re-engage them with a ₹{discount} off offer {closer}",
+        ]
+        return "recall", _pool[_cta_pool_idx]
 
     if has_strong_offer:
         return "activate_offer", f"Want me to activate a ₹{discount} off deal {closer}"
@@ -118,8 +149,9 @@ def generate_variants(
     has_strong_offer = plan.promo_pct >= 14
     estimated_value = plan.estimated_revenue
     message_type = _message_type_for(strategy_type)
-    # Compute meaningful rupee discount: AOV × promo_pct, rounded to nearest ₹5
-    discount = _discount_amount(ctx.aov, plan.promo_pct)
+    # Compute meaningful rupee discount: strategy-aware AOV × rate, rounded to nearest ₹5
+    discount = _discount_amount(ctx.aov, plan.promo_pct, strategy_type)
+    demand_phrase = _demand_phrase(ctx.merchant_id)
 
     # Customer personalization: only when low fatigue (< 3 recent interactions)
     customer_prefix = ""
@@ -137,6 +169,7 @@ def generate_variants(
             strategy_type=strategy_type,
             intent_score=fused.intent_score,
             tone_voice=tone.voice,
+            merchant_id=ctx.merchant_id,
         )
 
     cta_type, cta0 = _cta(0)
@@ -194,17 +227,17 @@ def generate_variants(
         ]
     elif strategy_type == "social_proof":
         line1_variants = [
-            f"{plan.estimated_customers} people are actively ordering {tone.category_noun} nearby right now.",
-            f"{plan.estimated_customers} others acted on this signal today — window is closing.",
-            f"{customer_prefix}{plan.estimated_customers} local buyers already moved on this.".strip(),
+            f"{plan.estimated_customers} {demand_phrase} are actively ordering {tone.category_noun} nearby right now.",
+            f"{plan.estimated_customers} {demand_phrase} acted on this signal today — window is closing.",
+            f"{customer_prefix}{plan.estimated_customers} {demand_phrase} already moved on this.".strip(),
         ]
     else:
-        base_line = TONE_LINE1.get(tone.voice, f"{plan.estimated_customers} potential customers in {ctx.city} are actively searching right now.")
+        base_line = TONE_LINE1.get(tone.voice, f"{plan.estimated_customers} {demand_phrase} in {ctx.city} are actively searching right now.")
         personalized_line = (customer_prefix + base_line[0].lower() + base_line[1:]).strip() if customer_prefix else base_line
         line1_variants = [
             personalized_line,
-            f"{plan.estimated_customers} people searched for {tone.category_noun} in {ctx.city} today — window is live.",
-            f"{plan.estimated_customers} nearby users can generate ₹{estimated_value} if you act now.",
+            f"{plan.estimated_customers} {demand_phrase} searched for {tone.category_noun} in {ctx.city} today — window is live.",
+            f"{plan.estimated_customers} {demand_phrase} can generate ₹{estimated_value} if you act now.",
         ]
 
     def _make_variant(line1: str, cta: str, rationale_items: list[str]) -> Variant:
