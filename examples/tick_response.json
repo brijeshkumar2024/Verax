@@ -1,0 +1,16 @@
+{
+  "message": "190 people can convert today; a 13% move can drive about Rs52934 GMV.\nDemand signal: high-intent demand surge in Bengaluru; act now to secure top intent.",
+  "cta": "Enable a 13% dinner push right now?",
+  "send_as": "merchant",
+  "suppression_key": "m_1021:spike:2026050214",
+  "rationale": [
+    "Primary signal: demand with intent 77 and urgency 68.",
+    "Trigger semantic meaning: high-intent demand surge (right now).",
+    "Merchant fit 60 and fatigue penalty 0 shaped tone and CTA.",
+    "3 variants scored; winner selected deterministically at 86/100.",
+    "Dominant signal selected: demand",
+    "Trigger interpreted as high-intent demand surge",
+    "Category voice applied: sharp-growth"
+  ],
+  "decision_score": 86
+}
