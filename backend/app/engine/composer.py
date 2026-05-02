@@ -33,6 +33,7 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
         merchant_id=ctx.merchant_id,
         trigger_type=ctx.trigger_type,
         timestamp_utc=ctx.timestamp_utc,
+        strategy=strategy,
     )
 
     # Check if this trigger is already active in suppression window
@@ -65,7 +66,11 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
     if best_variant_message.split("\n")[-1].strip() != best.variant.cta.strip():
         best_variant_message = best_variant_message.split("\n")[0] + "\n" + best.variant.cta
 
-    rationale_list = build_rationale(ctx, trig, fused, plan, strategy, cta_type, best.total_score)
+    rationale_list = build_rationale(
+        ctx, trig, fused, plan, strategy, cta_type, best.total_score,
+        winner_score=best.total_score,
+        rejected_scores=[s.total_score for s in scored[1:]],
+    )
     rationale = " | ".join(r.lstrip("🎯⚡⚠️👤💡📊 ") for r in rationale_list)
 
     # Enforce strict 2-line message: line1 = context, line2 = CTA (must match exactly)

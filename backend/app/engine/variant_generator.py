@@ -81,33 +81,42 @@ def generate_variants(
     )
     message_type = _message_type_for(strategy_type)
 
-    # Category-specific tone applied to line1 wording
+    # Customer personalization prefix when context is available
+    customer_prefix = ""
+    if ctx.customer_loyalty and ctx.customer_loyalty in {"gold", "platinum"}:
+        customer_prefix = f"As a {ctx.customer_loyalty} member — "
+    elif ctx.visits_last_30d > 3:
+        customer_prefix = f"You've visited {ctx.visits_last_30d}x this month — "
+
+    # Category-specific tone with engagement language ("actively searching" > "ready")
     TONE_LINE1: dict[str, str] = {
-        "sharp-growth":     f"{plan.estimated_customers} hungry buyers in {ctx.city} are ready to order {ctx.category} today.",
-        "coach-driven":     f"{plan.estimated_customers} members in {ctx.city} are ready to book a session today.",
-        "premium-friendly": f"{plan.estimated_customers} style-seekers in {ctx.city} are looking for a slot today.",
-        "clinical-trust":   f"{plan.estimated_customers} patients in {ctx.city} need a trusted {ctx.category} appointment today.",
-        "care-urgent":      f"{plan.estimated_customers} customers in {ctx.city} need a refill or care visit today.",
+        "sharp-growth":     f"{plan.estimated_customers} hungry buyers in {ctx.city} are actively searching for {ctx.category} right now.",
+        "coach-driven":     f"{plan.estimated_customers} members in {ctx.city} are actively looking to book a session right now.",
+        "premium-friendly": f"{plan.estimated_customers} style-seekers in {ctx.city} are actively browsing for a slot right now.",
+        "clinical-trust":   f"{plan.estimated_customers} patients in {ctx.city} are actively seeking a trusted {ctx.category} today.",
+        "care-urgent":      f"{plan.estimated_customers} customers in {ctx.city} need a refill or care visit right now.",
     }
 
     if ctx.trigger_type == "rating_dip":
         line1_variants = [
-            "Recent rating drop detected impacting customer trust.",
-            "Customer trust is slipping after a recent rating drop.",
+            f"{customer_prefix}Recent rating drop is actively pushing customers away.".lstrip(),
+            "Customer trust is slipping — each hour costs repeat revenue.",
             "Protect revenue before more customers lose confidence today.",
         ]
     elif strategy_type == "social_proof":
         line1_variants = [
-            f"{plan.estimated_customers} people ordered from {ctx.category} nearby today.",
-            f"{plan.estimated_customers} others ordered today — join them before the window closes.",
-            f"{plan.estimated_customers} local buyers acted on this signal today.",
+            f"{plan.estimated_customers} people are actively ordering {ctx.category} nearby right now.",
+            f"{plan.estimated_customers} others acted on this signal today — window is closing.",
+            f"{customer_prefix}{plan.estimated_customers} local buyers moved on this already.".lstrip(),
         ]
     else:
-        tone_line = TONE_LINE1.get(tone.voice, f"{plan.estimated_customers} nearby buyers are ready today.")
+        tone_line = TONE_LINE1.get(tone.voice, f"{plan.estimated_customers} nearby buyers are actively searching right now.")
+        if customer_prefix:
+            tone_line = customer_prefix + tone_line[0].lower() + tone_line[1:]
         line1_variants = [
             tone_line,
-            f"{plan.estimated_customers} people searched for {ctx.category} nearby today.",
-            f"{plan.estimated_customers} nearby users can generate ₹{estimated_value} today.",
+            f"{plan.estimated_customers} people searched for {ctx.category} in {ctx.city} today — window is live.",
+            f"{plan.estimated_customers} nearby users can generate ₹{estimated_value} if you act now.",
         ]
     line2 = cta
 
