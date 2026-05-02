@@ -140,7 +140,7 @@ def tick(payload: ComposeRequest) -> ComposeResponse:
         print(f"VERAX TICK ERROR: {e}")
         return ComposeResponse(
             message="High demand detected. A targeted offer can capture this window today.",
-            cta="Run a quick offer to capture demand now?",
+            cta="Want me to send them a quick offer now?",
             send_as="system",
             suppression_key="fallback",
             suppressed=False,

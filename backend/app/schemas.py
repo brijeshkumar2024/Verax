@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 CategoryType = Literal["restaurant", "gym", "salon", "dentist", "pharmacy"]
@@ -36,6 +36,16 @@ class TriggerInput(BaseModel):
     baseline_value: float = Field(gt=0, description="Baseline metric value. Must be > 0.")
     window_minutes: int = Field(default=180, ge=15, le=1440)
     timestamp_utc: str
+
+    @field_validator("timestamp_utc")
+    @classmethod
+    def validate_timestamp(cls, v: str) -> str:
+        from datetime import datetime
+        try:
+            datetime.fromisoformat(v.replace("Z", "+00:00"))
+        except ValueError:
+            raise ValueError("timestamp_utc must be a valid ISO 8601 datetime string, e.g. 2026-05-02T14:00:00Z")
+        return v
 
 
 class CustomerInput(BaseModel):
