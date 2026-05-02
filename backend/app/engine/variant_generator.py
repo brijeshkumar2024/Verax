@@ -33,16 +33,16 @@ def _cta_for(
     estimated_customers: int,
 ) -> tuple[str, str]:
     if trigger_type == "rating_dip":
-        return "recover_trust", f"Run ₹{promo_pct} trust-recovery campaign to improve reviews now?"
+        return "recover_trust", f"Run {promo_pct}% trust-recovery campaign to improve reviews now?"
     if fatigue_score > 0.6:
-        return "soft_nudge", f"Run a low-pressure ₹{promo_pct} recovery test today?"
+        return "soft_nudge", f"Run a low-pressure {promo_pct}% recovery test today?"
     if trigger_type == "spike":
-        return "push_now", f"Push ₹{promo_pct} offer to {estimated_customers} users now?"
+        return "push_now", f"Push {promo_pct}% offer to {estimated_customers} users now?"
     if trigger_type == "drop":
-        return "recover_drop", f"Run ₹{promo_pct} boost to recover orders now?"
+        return "recover_drop", f"Run {promo_pct}% boost to recover orders now?"
     if has_strong_offer:
-        return "activate_offer", f"Activate ₹{promo_pct} offer for today?"
-    return "soft_nudge", f"Run a low-pressure ₹{promo_pct} recovery test today?"
+        return "activate_offer", f"Activate {promo_pct}% offer for today?"
+    return "soft_nudge", f"Run a low-pressure {promo_pct}% recovery test today?"
 
 
 def _line2(priority: str, city: str, trigger_label: str) -> str:

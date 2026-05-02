@@ -30,8 +30,8 @@ def decide(ctx: NormalizedContext, fused: FusedSignals, trig: TriggerMeaning) ->
     base_promo = 8 + int((fused.urgency_score + trig.priority_weight) / 20)
     promo_pct = min(25, max(8, base_promo))
 
-    estimated_customers = min(5_000, max(35, int(ctx.weekly_orders * 0.08 + fused.intent_score * 1.3)))
-    estimated_revenue = min(1_000_000, int(estimated_customers * ctx.aov * (1 - (promo_pct / 100))))
+    estimated_customers = min(500, max(35, int(ctx.weekly_orders * 0.008 + fused.intent_score * 1.3)))
+    estimated_revenue = min(50_000, int(estimated_customers * ctx.aov * (1 - (promo_pct / 100))))
 
     return DecisionPlan(
         priority=priority,
