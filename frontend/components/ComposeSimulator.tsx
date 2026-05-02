@@ -102,16 +102,19 @@ export default function ComposeSimulator() {
   async function runDecision(p: ComposePayload) {
     setLoading(true);
     setError(null);
-    try {
-      const res = await runCompose(p);
-      setOutput(res);
-    } catch (err) {
-      console.error("API ERROR:", err);
+    // Minimum 600ms so output doesn't feel instant/fake
+    const [res] = await Promise.allSettled([
+      runCompose(p),
+      new Promise((r) => setTimeout(r, 600)),
+    ]);
+    if (res.status === "fulfilled") {
+      setOutput(res.value as ComposeResponse);
+    } else {
+      console.error("API ERROR:", res.reason);
       setOutput(null);
       setError("Unable to reach the decision engine. Please check your connection and try again.");
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   }
 
   // Auto-run on mount
@@ -145,7 +148,12 @@ export default function ComposeSimulator() {
         value={value}
         min={min}
         max={max}
-        onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value))))}
+        onChange={(e) => {
+          const raw = e.target.value;
+          const parsed = parseFloat(raw);
+          if (raw === "" || isNaN(parsed)) return; // ignore empty / non-numeric
+          onChange(Math.min(max, Math.max(min, parsed)));
+        }}
       />
     );
   }
@@ -229,7 +237,7 @@ export default function ComposeSimulator() {
                 <motion.div
                   className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-400 to-cyan-400"
                   initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(parseFloat(ratio) * 15, 100)}%` }}
+                  animate={{ width: `${Math.min((Math.log(parseFloat(ratio) + 1) / Math.log(11)) * 100, 100)}%` }}
                   transition={{ duration: 0.6, ease: "easeOut" }}
                 />
               </div>
@@ -237,7 +245,7 @@ export default function ComposeSimulator() {
             </div>
 
             {/* Metrics Grid */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 md:gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold uppercase tracking-wider text-gray-300">
                   AOV (₹)
@@ -295,10 +303,10 @@ export default function ComposeSimulator() {
             <motion.button
               type="button"
               onClick={onRun}
-              disabled={loading}
-              whileHover={{ scale: 1.03, y: -1 }}
+              disabled={loading || Object.keys(fieldErrors).length > 0}
+              whileHover={{ scale: loading ? 1 : 1.03, y: loading ? 0 : -1 }}
               whileTap={{ scale: 0.97 }}
-              className="btn-primary w-full relative overflow-hidden group py-3 rounded-xl font-semibold text-sm"
+              className="btn-primary w-full relative overflow-hidden group py-3 rounded-xl font-semibold text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <div className="absolute inset-0 opacity-0 group-hover:opacity-20 bg-white transition-opacity" />
               {loading ? (

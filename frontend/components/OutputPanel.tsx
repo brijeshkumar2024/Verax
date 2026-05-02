@@ -9,12 +9,13 @@ interface OutputPanelProps {
   loading?: boolean;
 }
 
-// Format ₹140800 → ₹1.4L, ₹320 → ₹320
+// Format large INR values for Indian context
 function formatINR(n: number): string {
+  if (isNaN(n) || !isFinite(n)) return "₹—";
   if (n >= 10_00_000) return `₹${(n / 10_00_000).toFixed(1)}Cr`;
   if (n >= 1_00_000) return `₹${(n / 1_00_000).toFixed(1)}L`;
-  if (n >= 1_000) return `₹${(n / 1_000).toFixed(1)}K`;
-  return `₹${n}`;
+  if (n >= 10_000) return `₹${(n / 1_000).toFixed(0)}K`;
+  return `₹${n.toLocaleString("en-IN")}`;
 }
 
 function formatMessageNumbers(text: string): string {
@@ -128,11 +129,11 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
   const { trigger, opportunity, strategy } = extractTriggerContext(output.rationale ?? []);
   const triggerContext = triggerContextSentence(trigger);
 
-  // Parse estimated revenue from actionLine for formatted display
-  const revenueMatch = actionLine.match(/₹([\d,]+)/);
-  const revenueFormatted = revenueMatch
-    ? formatINR(parseInt(revenueMatch[1].replace(/,/g, ""), 10))
-    : null;
+  // Extract revenue from message or CTA — resilient fallback
+  const revenueMatch = output.message.match(/₹(\d[\d,]*)/) ?? output.cta.match(/₹(\d[\d,]*)/);
+  const revenueRaw = revenueMatch ? parseInt(revenueMatch[1].replace(/,/g, ""), 10) : null;
+  // Only show impact card if revenue is meaningful (>1000 = not a promo %)
+  const revenueFormatted = revenueRaw && revenueRaw > 1000 ? formatINR(revenueRaw) : null;
 
   return (
     <motion.section
