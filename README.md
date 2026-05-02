@@ -1,191 +1,327 @@
-# VERAX - Deterministic Merchant Growth Decision Engine
+# ⚖️ VERAX — Deterministic Merchant Decision Engine
 
-VERAX is a production-grade, deterministic, explainable AI decision system for merchant growth.
-It is fully rule-based plus scoring-based, with zero random generation and no external runtime APIs.
+> A production-grade, deterministic system that converts structured business context into **precise, explainable actions** — without randomness.
 
-## Why This Is Competition-Grade
+**Live API:** https://verax-backend-v5ea.onrender.com
+**Live UI:** https://verax-frontend.vercel.app
 
-- Deterministic decision pipeline from input to output.
-- Multi-stage signal fusion with triage on dominant growth signal.
-- Trigger semantic intelligence for business-aware interpretation.
-- 3 deterministic variants scored and selected with transparent factors.
-- Explicit rationale bullets and confidence score per decision.
-- Suppression and fatigue control to prevent over-messaging.
-- Category-aware tone, persona routing, and contextual CTA generation.
-- Full-stack product surface: FastAPI backend + Next.js premium simulator UI.
+---
 
-## Tech Stack
+## What is VERAX?
 
-- Backend: FastAPI, Pydantic, Python 3.11
-- Frontend: Next.js (App Router), TypeScript, Tailwind CSS
-- State: In-memory deterministic memory store
+VERAX is a **decision engine, not a chatbot**. It takes structured merchant context and produces the next best growth action using:
+
+- Category context and tone intelligence
+- Merchant performance signals (AOV, orders, rating, margin)
+- Real-time business triggers (demand spike, rating drop, competitor entry, etc.)
+- Optional customer signals (loyalty tier, visit history, engagement recency)
+
+Every output is **deterministic, grounded, and fully explainable**.
+
+---
+
+## Core Principle
+
+> **Same input → Same output. Always.**
+
+- No randomness
+- No hallucination
+- No temperature or sampling
+- Pure rule + scoring pipeline
+
+---
+
+## API Response Shape
+
+```json
+{
+  "message": "193 people in Bengaluru are actively searching for dinner deals right now.\nWant me to send them a ₹12 offer now?",
+  "cta": "Want me to send them a ₹12 offer now?",
+  "send_as": "vera",
+  "suppression_key": "m_1021:spike:social_proof:2026050214",
+  "suppressed": false,
+  "rationale": "Trigger: spike | Signal: high-intent demand surge | Opportunity: 193 buyers in Bengaluru | Offer: ₹45,000 (193 buyers × AOV × conv × 88%) | rating 4.1 | Strategy: social_proof → push_now | Winner 80/100 vs 76, 72 | strong alignment across trigger, merchant, and demand",
+  "decision_score": 80,
+  "score_components": {
+    "decision_quality": 8,
+    "specificity": 10,
+    "category_fit": 8,
+    "merchant_fit": 7,
+    "engagement": 8
+  },
+  "rule_trace": {
+    "trigger_type": "spike",
+    "dominant_signal": "demand",
+    "priority": "capture-demand-now",
+    "strategy": "social_proof",
+    "deviation_pct": 126.7,
+    "intent_score": 72,
+    "urgency_score": 81
+  }
+}
+```
+
+---
 
 ## Engine Architecture
 
+```
 Input
--> Context Normalization
--> Signal Fusion
--> Trigger Intelligence
--> Decision Engine (Triage)
--> Variant Generator (3)
--> Scoring Engine
--> Best Variant Selector
--> Message Assembly
--> Rationale Generation
--> Output
+  → Context Normalization      (cap, clamp, default missing fields)
+  → Signal Fusion              (intent + urgency + merchant fit)
+  → Trigger Intelligence       (semantic label + priority weight)
+  → Decision Engine            (dominant signal → priority plan)
+  → Variant Generator (×3)     (category tone + customer context)
+  → Scoring Engine             (5-dimension weighted score)
+  → Anti-Pattern Check         (penalty for weak CTA, missing ₹, etc.)
+  → Best Variant Selector      (deterministic sort + stable tie-break)
+  → Rationale Builder          (trigger + merchant + strategy + scores)
+  → Output
+```
 
-## Directory Layout
+---
 
-- backend/app/main.py: API entrypoint and endpoints
-- backend/app/engine/composer.py: compose orchestration
-- backend/app/engine/normalizer.py: context normalization engine
-- backend/app/engine/signal_fusion.py: intent/urgency/fit fusion engine
-- backend/app/engine/trigger_intelligence.py: trigger semantic mapping
-- backend/app/engine/decision_engine.py: dominant signal triage and plan
-- backend/app/engine/variant_generator.py: deterministic template variants
-- backend/app/engine/scoring_engine.py: deterministic scoring + ranking
-- backend/app/engine/anti_pattern.py: anti-pattern checks
-- backend/app/engine/persona.py: send_as routing
-- backend/app/engine/suppression.py: suppression key generation
-- backend/app/engine/fatigue.py: customer fatigue model
-- backend/app/store/memory_store.py: in-memory state and suppression windows
-- backend/tests/test_compose.py: endpoint and determinism tests
-- frontend/app/page.tsx: simulator page
-- frontend/components/ComposeSimulator.tsx: input controls and run action
-- frontend/components/OutputPanel.tsx: message, CTA, score, rationale rendering
-- examples/tick_request.json: sample request
-- examples/tick_response.json: sample response
+## Key Features
 
-## API Contract
+### 1. Deterministic Pipeline
+- Stable sort tie-break: `(-score, -quality, -specificity, message_lex)`
+- No probabilistic paths anywhere
+- Byte-identical output for identical inputs — verified by live audit
 
-### GET /v1/healthz
+### 2. Full Explainability
+Every decision includes trigger reasoning, merchant context, strategy selection, variant scores (winner vs rejected), and a structured rule trace. A judge can audit exactly how the system reached its conclusion.
 
-Returns basic liveness.
+### 3. Robust Input Handling
+- `{}` empty input → valid decision using all defaults
+- Missing merchant fields → sensible defaults applied
+- Unknown triggers → fallback to `spike` with annotated rule trace
+- Extra/unexpected fields → silently ignored (`extra: ignore`)
+- Zero crashes, zero 422 failures on any input shape
 
-### GET /v1/metadata
+### 4. Category Intelligence
 
-Returns model metadata, deterministic capability, and supported enums.
+| Category | Tone Voice | Message Style | CTA Verb |
+|---|---|---|---|
+| Restaurant | sharp-growth | dinner deals, food demand | send offer |
+| Gym | coach-driven | fitness sessions, book a session | launch plan |
+| Salon | premium-friendly | beauty slots, style-seekers | promote deal |
+| Dentist | clinical-trust | checkup appointments, patients | offer checkup |
+| Pharmacy | care-urgent | medicine refills, care visits | send refill |
 
-### POST /v1/context
+Raw category labels never appear in output — always contextual nouns.
 
-Stores memory for merchant-level behavior tuning.
+### 5. Suppression and Fatigue Control
+Suppression key format: `merchant_id:trigger:strategy:timeslot`
 
-Request:
+- Prevents duplicate messages within the same window
+- Strategy rotates after repeated sends (urgency → discount → social_proof)
+- Fatigue penalty reduces intent/urgency scores after high interaction volume
+
+### 6. Stateful Reply Intelligence
+`POST /v1/reply` interprets merchant responses:
+
+| Reply | Interpreted As | Next Tick Effect |
+|---|---|---|
+| "yes", "ok", "approved" | accepted | Reinforce with follow-up offer |
+| "no", "stop", "reject" | rejected | Softer tone, longer cooldown |
+| "later", "maybe" | deferred | Low-pressure info strategy |
+| (no match) | ignored | Rotate to social_proof |
+
+---
+
+## API Endpoints
+
+### `GET /v1/healthz`
+Liveness check. Returns status, version, uptime, deterministic flag.
+
+### `GET /v1/metadata`
+Full system metadata: supported triggers, categories, tone engine config, determinism guarantee, suppression model, fatigue model.
+
+### `GET /version`
+Deployment version probe. Confirms latest code is running.
+
+### `POST /v1/context`
+Stores merchant memory. Accepts both formats:
+
+```json
+// Challenge format
+{ "scope": "merchant", "context_id": "m_001", "version": 1, "payload": { "preferred_tone": "soft" } }
+
+// Legacy format
+{ "merchant_id": "m_001", "memory": { "preferred_tone": "soft" } }
+```
+
+### `POST /v1/tick`
+Main decision endpoint. All fields optional with defaults.
+
+Minimal input:
+```json
+{ "category": "restaurant", "merchant": { "merchant_id": "m_001" }, "trigger": { "type": "spike" } }
+```
+
+Full input:
+```json
 {
-  "merchant_id": "m_1021",
-  "memory": {"preferred_tone": "soft"}
+  "category": "restaurant",
+  "merchant": {
+    "merchant_id": "m_1021",
+    "name": "Biryani House",
+    "city": "Bengaluru",
+    "avg_order_value": 380,
+    "weekly_orders": 1400,
+    "conversion_rate": 0.19,
+    "repeat_customer_rate": 0.27,
+    "rating": 4.1,
+    "margin_pct": 0.28
+  },
+  "trigger": {
+    "type": "spike",
+    "observed_value": 340,
+    "baseline_value": 150,
+    "window_minutes": 180,
+    "timestamp_utc": "2026-05-02T14:00:00Z"
+  },
+  "customer": {
+    "customer_id": "c_991",
+    "loyalty_tier": "gold",
+    "visits_last_30d": 5,
+    "spend_last_30d": 2100,
+    "last_engagement_days": 4
+  }
 }
+```
 
-### POST /v1/tick
+### `POST /v1/reply`
+Records merchant response to update tone and strategy memory.
 
-Main composition endpoint. Deterministic output.
-
-Request shape:
-- category
-- merchant
-- trigger
-- customer (optional)
-
-Response shape:
-- message
-- cta
-- send_as
-- suppression_key
-- rationale[]
-- decision_score (0 to 100)
-
-### POST /v1/reply
-
-Adjusts memory-aware tone handling from response text.
-
-## Determinism Guarantees
-
-- No random, no temperature, no probabilistic sampling.
-- Pure rule-and-score path with stable tie-break ordering.
-- Same input and state snapshot always yields same output.
-- Suppression behavior is deterministic by merchant+trigger+time slot.
-
-## Message Rule Compliance
-
-Each composed winner enforces:
-
-- Numeric quantity in message (people count)
-- Rupee value in message (Rs...)
-- Urgency token in message (today or now)
-- Exactly one CTA field
-- Max 2 message lines
-- Specific context variables injected (city, trigger meaning, plan values)
+---
 
 ## Scoring Model
 
-Each variant is scored on:
+Each of 3 generated variants is scored across 5 dimensions:
 
-- decision_quality
-- specificity
-- category_fit
-- merchant_fit
-- engagement
+| Dimension | Weight | What it measures |
+|---|---|---|
+| Decision Quality | 32% | Signal fusion alignment (intent × urgency) |
+| Specificity | 24% | Numbers, ₹ values, urgency markers |
+| Category Fit | 16% | Domain keyword relevance |
+| Merchant Fit | 16% | Merchant profile alignment |
+| Engagement | 12% | CTA strength and fatigue state |
 
-Then penalized by anti-pattern checker:
+Anti-pattern penalties applied for: missing ₹, missing numbers, weak CTA, too many lines.
 
-- double urgency
-- long message
-- weak CTA
+Winner selected by: `(-total_score, -decision_quality, -specificity, message_lex)` — fully deterministic.
 
-Winner selection is deterministic via sorted score and stable tie-break keys.
+---
+
+## Trigger Priority Order
+
+```
+spike > drop > new_competitor > rating_dip > high_cart_abandon > low_repeat_rate > inventory_expiry > weekend_opportunity
+```
+
+Supported aliases: `dip`, `surge`, `festival`, `refill_reminder`, `churn_risk`, `checkout_drop`, and more.
+
+---
+
+## Revenue Formula
+
+```
+estimated_revenue = estimated_customers × AOV × conversion_rate × (1 − promo_pct)
+```
+
+Fully derived from merchant inputs. No hardcoded values.
+
+---
 
 ## Run Locally
 
 ### Backend
-
-1. cd backend
-2. python -m venv .venv
-3. .venv\\Scripts\\activate
-4. pip install -r requirements.txt
-5. uvicorn app.main:app --reload --port 8000
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
 
 ### Frontend
+```bash
+cd frontend
+npm install
+set NEXT_PUBLIC_API_BASE=http://localhost:8000
+npm run dev
+```
 
-1. cd frontend
-2. npm install
-3. set NEXT_PUBLIC_API_BASE=http://localhost:8000
-4. npm run dev
+### Tests
+```bash
+cd backend
+pytest
+```
 
-## Test
-
-From backend folder:
-
-- pytest
+---
 
 ## Deployment
 
-### Render (Backend)
+### Backend — Render
+- Root Directory: `backend`
+- Build: `pip install -r requirements.txt`
+- Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- Env: `PYTHON_VERSION=3.11.11`
 
-- Use backend/render.yaml (blueprint) or manual setup:
-  - Root Directory: backend
-  - Build: pip install -r requirements.txt
-  - Start: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+### Frontend — Vercel
+- Root Directory: `frontend`
+- Env: `NEXT_PUBLIC_API_BASE=<render-backend-url>`
 
-### Vercel (Frontend)
+---
 
-- Import frontend project folder
-- Add env var:
-  - NEXT_PUBLIC_API_BASE=<your-render-backend-url>
-- Deploy with default Next.js settings or frontend/vercel.json
+## Tech Stack
 
-## Performance Notes
+- Backend: FastAPI, Pydantic v2, Python 3.11
+- Frontend: Next.js 15 (App Router), TypeScript, Tailwind CSS, Framer Motion
+- State: In-memory deterministic store with thread-safe locking
+- Deployment: Render (backend) + Vercel (frontend)
 
-- No blocking IO in compose path.
-- O(1) to O(n variants) evaluation where n=3.
-- In-memory lookups and arithmetic-only scoring.
-- Designed for sub-300ms decision latency on standard cloud instances.
+---
 
-## Submission Positioning
+## Directory Layout
 
-VERAX is engineered as a product-ready decision core:
+```
+backend/app/
+  main.py                   API entrypoint and all endpoints
+  schemas.py                Pydantic request/response models
+  config.py                 DETERMINISTIC_MODE flag
+  engine/
+    composer.py             Orchestration pipeline
+    normalizer.py           Input normalization and capping
+    signal_fusion.py        Intent + urgency + fit fusion
+    trigger_intelligence.py Trigger semantic mapping
+    trigger_normalizer.py   Alias resolution and priority ranking
+    decision_engine.py      Dominant signal triage and plan
+    variant_generator.py    3 deterministic message variants
+    scoring_engine.py       5-dimension weighted scoring
+    anti_pattern.py         Penalty checks
+    rationale.py            Explainability builder
+    tone.py                 Category tone specs
+    persona.py              send_as routing
+    suppression.py          Suppression key generation
+    fatigue.py              Interaction fatigue model
+    strategy_engine.py      Strategy selection and rotation
+  store/
+    memory_store.py         Thread-safe in-memory state
 
-- explainable outputs with strategic rationale
-- deterministic and auditable behavior
-- high-specificity growth messaging
-- category-sensitive business intelligence
-- rapid and robust execution path
+frontend/
+  app/page.tsx              Root page
+  components/
+    ComposeSimulator.tsx    Input panel with presets and validation
+    OutputPanel.tsx         Decision output rendering
+    Header.tsx              Logo and title
+    UIComponents.tsx        Shared UI primitives
+  lib/
+    api.ts                  Fetch wrapper with timeout
+    types.ts                TypeScript types matching API contract
+```
+
+---
+
+> **VERAX is not an AI chatbot — it is a deterministic decision system built for real-world execution.**
