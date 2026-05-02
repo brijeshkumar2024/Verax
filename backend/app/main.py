@@ -144,7 +144,7 @@ def tick(payload: ComposeRequest) -> ComposeResponse:
             send_as="system",
             suppression_key="fallback",
             suppressed=False,
-            rationale=["Fallback decision triggered", "Edge case input detected", "Safe default applied"],
+            rationale="Fallback decision triggered | Edge case input detected | Safe default applied",
             decision_score=50,
             score_components={"decision_quality": 5, "specificity": 5, "category_fit": 5, "merchant_fit": 5, "engagement": 5},
             rule_trace=RuleTrace(

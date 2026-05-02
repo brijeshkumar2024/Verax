@@ -69,7 +69,7 @@ class ComposeResponse(BaseModel):
     send_as: Literal["vera", "system", "merchant"]
     suppression_key: str
     suppressed: bool = False
-    rationale: List[str]
+    rationale: str
     decision_score: int = Field(ge=0, le=100)
     score_components: Dict[str, int] = Field(default_factory=dict)
     rule_trace: RuleTrace

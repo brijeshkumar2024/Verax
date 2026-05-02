@@ -65,9 +65,13 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
     if best_variant_message.split("\n")[-1].strip() != best.variant.cta.strip():
         best_variant_message = best_variant_message.split("\n")[0] + "\n" + best.variant.cta
 
-    rationale = build_rationale(ctx, trig, fused, plan, strategy, cta_type, best.total_score)
+    rationale_list = build_rationale(ctx, trig, fused, plan, strategy, cta_type, best.total_score)
+    rationale = " | ".join(r.lstrip("🎯⚡⚠️👤💡📊 ") for r in rationale_list)
 
-    # Build structured rule trace for transparency
+    # Enforce strict 2-line message: line1 = context, line2 = CTA (must match exactly)
+    lines = [l.strip() for l in best_variant_message.split("\n") if l.strip()]
+    line1 = lines[0] if lines else best_variant_message
+    best_variant_message = line1 + "\n" + best.variant.cta
     deviation_pct = round((ctx.trigger_ratio - 1.0) * 100, 1)
     rule_trace = RuleTrace(
         trigger_type=ctx.trigger_type,
