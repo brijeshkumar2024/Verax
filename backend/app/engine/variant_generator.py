@@ -30,12 +30,12 @@ _CLOSERS = ["now?", "right away?", "today?"]
 
 # Category-specific action verbs for CTA precision
 _CTA_VERB: dict[str, str] = {
-    "sharp-growth":     "send offer",
-    "coach-driven":     "launch plan",
-    "premium-friendly": "promote deal",
-    "clinical-trust":   "offer checkup",
-    "care-urgent":      "send refill",
-    "neutral":          "send offer",
+    "sharp-growth":     "send them a ₹{p} offer",
+    "coach-driven":     "launch a ₹{p} plan for them",
+    "premium-friendly": "promote a ₹{p} deal to them",
+    "clinical-trust":   "offer them a ₹{p} checkup",
+    "care-urgent":      "send them a ₹{p} refill offer",
+    "neutral":          "send them a ₹{p} offer",
 }
 
 
@@ -51,43 +51,40 @@ def _cta_for(
     tone_voice: str = "neutral",
 ) -> tuple[str, str]:
     # High confidence (urgency + high intent) → "Want me to" (execution ready)
-    # Otherwise → "Should I" (advisory)
-    high_confidence = (strategy_type == "urgency" and intent_score >= 60)
-    prefix = "Want me to" if high_confidence else "Should I"
+    # Otherwise → "Want me to" always — consistent assistant tone, no identity confusion
     closer = _CLOSERS[cta_variant % 3]
-    verb = _CTA_VERB.get(tone_voice, "send offer")
+    verb_tpl = _CTA_VERB.get(tone_voice, "send them a ₹{p} offer")
+    verb = verb_tpl.replace("{p}", str(promo_pct))  # number only in verb, never repeated in CTA
 
     if trigger_type == "rating_dip":
-        # Short, no number repeat
-        return "recover_trust", f"{prefix} run a ₹{promo_pct} trust-recovery campaign {closer}"
+        return "recover_trust", f"Want me to run a ₹{promo_pct} trust-recovery campaign {closer}"
 
     if fatigue_score > 0.6:
-        return "soft_nudge", f"{prefix} run a ₹{promo_pct} recovery offer today?"
+        return "soft_nudge", f"Want me to run a ₹{promo_pct} recovery offer today?"
 
     if trigger_type == "spike":
-        # Use "them" to avoid repeating estimated_customers number
         _variants = [
-            f"{prefix} {verb} a ₹{promo_pct} offer to them {closer}",
-            f"{prefix} push a ₹{promo_pct} offer before the window closes?",
-            f"{prefix} capture them with a ₹{promo_pct} offer {closer}",
+            f"Want me to {verb} {closer}",
+            f"Want me to push a ₹{promo_pct} offer before the window closes?",
+            f"Want me to capture them with a ₹{promo_pct} offer {closer}",
         ]
         return "push_now", _variants[cta_variant % 3]
 
     if trigger_type == "drop":
         _variants = [
-            f"{prefix} {verb} a ₹{promo_pct} boost to recover orders {closer}",
-            f"{prefix} activate a ₹{promo_pct} recovery offer today?",
-            f"{prefix} win back orders with a ₹{promo_pct} boost {closer}",
+            f"Want me to {verb} to recover orders {closer}",
+            f"Want me to activate a ₹{promo_pct} recovery offer today?",
+            f"Want me to win back orders with a ₹{promo_pct} boost {closer}",
         ]
         return "recover_drop", _variants[cta_variant % 3]
 
     if trigger_type == "low_repeat_rate":
-        return "recall", f"{prefix} remind them with a ₹{promo_pct} offer today?"
+        return "recall", f"Want me to remind them with a ₹{promo_pct} offer today?"
 
     if has_strong_offer:
-        return "activate_offer", f"{prefix} activate a ₹{promo_pct} offer {closer}"
+        return "activate_offer", f"Want me to activate a ₹{promo_pct} offer {closer}"
 
-    return "soft_nudge", f"{prefix} run a ₹{promo_pct} recovery test today?"
+    return "soft_nudge", f"Want me to run a ₹{promo_pct} recovery test today?"
 
 
 def _line2(priority: str, city: str, trigger_label: str) -> str:
