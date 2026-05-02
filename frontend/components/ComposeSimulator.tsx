@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { runCompose } from "../lib/api";
 import { Category, ComposePayload, ComposeResponse, TriggerType } from "../lib/types";
@@ -24,6 +24,17 @@ const categoryIcons: Record<Category, string> = {
   salon: "✨",
   dentist: "🦷",
   pharmacy: "💊",
+};
+
+const triggerLabels: Record<TriggerType, string> = {
+  spike: "Demand Spike",
+  drop: "Order Drop",
+  high_cart_abandon: "High Cart Abandon",
+  low_repeat_rate: "Low Repeat Rate",
+  new_competitor: "New Competitor",
+  rating_dip: "Rating Dip",
+  inventory_expiry: "Inventory Expiry",
+  weekend_opportunity: "Weekend Opportunity",
 };
 
 function initialPayload(): ComposePayload {
@@ -58,53 +69,108 @@ function initialPayload(): ComposePayload {
   };
 }
 
+function validate(payload: ComposePayload): Record<string, string> {
+  const e: Record<string, string> = {};
+  if (payload.merchant.avg_order_value <= 0) e.aov = "AOV must be greater than 0";
+  if (payload.merchant.weekly_orders <= 0) e.weekly_orders = "Weekly orders must be greater than 0";
+  if (payload.trigger.observed_value <= 0) e.observed = "Observed value must be greater than 0";
+  if (payload.trigger.baseline_value <= 0) e.baseline = "Baseline must be greater than 0";
+  return e;
+}
+
+function FieldHint({ text }: { text: string }) {
+  return <p className="text-xs text-gray-500 mt-1">{text}</p>;
+}
+
+function FieldError({ text }: { text: string }) {
+  return <p className="text-xs text-red-400 mt-1">{text}</p>;
+}
+
 export default function ComposeSimulator() {
   const [payload, setPayload] = useState<ComposePayload>(initialPayload);
   const [output, setOutput] = useState<ComposeResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [hasAutoRun, setHasAutoRun] = useState(false);
 
   const ratio = useMemo(() => {
     if (payload.trigger.baseline_value <= 0) return "0.00";
     return (payload.trigger.observed_value / payload.trigger.baseline_value).toFixed(2);
   }, [payload.trigger.baseline_value, payload.trigger.observed_value]);
 
-  async function onRun() {
+  async function runDecision(p: ComposePayload) {
     setLoading(true);
     setError(null);
     try {
-      const res = await runCompose(payload);
+      const res = await runCompose(p);
       setOutput(res);
     } catch (err) {
       console.error("API ERROR:", err);
       setOutput(null);
-      setError("Connection timeout. Check backend is running and retry.");
+      setError("Unable to reach the decision engine. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
   }
 
+  // Auto-run on mount
+  useEffect(() => {
+    if (!hasAutoRun) {
+      setHasAutoRun(true);
+      runDecision(initialPayload());
+    }
+  }, [hasAutoRun]);
+
+  function onRun() {
+    const errs = validate(payload);
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      return;
+    }
+    setFieldErrors({});
+    runDecision(payload);
+  }
+
+  function numericInput(
+    value: number,
+    onChange: (v: number) => void,
+    min: number,
+    max: number
+  ) {
+    return (
+      <input
+        type="number"
+        className="w-full"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value))))}
+      />
+    );
+  }
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Left Panel - Compose Simulator */}
+        {/* Left Panel */}
         <motion.section
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
           className="glass rounded-2xl p-6 md:p-8 border border-emerald-500/10"
         >
-          <h2 className="text-2xl font-bold text-white mb-2">Compose Simulator</h2>
+          <h2 className="text-xl font-bold text-white mb-1">Decision Inputs</h2>
           <p className="text-sm text-gray-400 mb-6">
-            Set merchant context and trigger. Runtime is fully rule-based, no random generation.
+            Set merchant context and trigger signal. The engine is fully rule-based — same inputs always produce the same decision.
           </p>
 
           <div className="space-y-5">
-            {/* Category and Trigger Row */}
+            {/* Category + Trigger */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-300">
-                  {categoryIcons[payload.category] || "📍"} Category
+                  {categoryIcons[payload.category]} Category
                 </label>
                 <select
                   className="w-full glass rounded-lg px-4 py-3 text-sm border border-emerald-500/20 focus:border-emerald-500/50"
@@ -124,9 +190,10 @@ export default function ComposeSimulator() {
                     </option>
                   ))}
                 </select>
+                <FieldHint text="Business type of the merchant" />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-300">
                   ⚡ Trigger
                 </label>
@@ -142,10 +209,11 @@ export default function ComposeSimulator() {
                 >
                   {triggers.map((t) => (
                     <option key={t} value={t}>
-                      {t}
+                      {triggerLabels[t]}
                     </option>
                   ))}
                 </select>
+                <FieldHint text="Business event that activates the decision" />
               </div>
             </div>
 
@@ -153,7 +221,7 @@ export default function ComposeSimulator() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold uppercase tracking-wider text-gray-300">
-                  📊 Trigger Strength
+                  Trigger Strength
                 </label>
                 <span className="text-sm font-bold text-emerald-400">{ratio}x</span>
               </div>
@@ -161,92 +229,65 @@ export default function ComposeSimulator() {
                 <motion.div
                   className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-400 to-cyan-400"
                   initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(parseFloat(ratio) * 30, 100)}%` }}
+                  animate={{ width: `${Math.min(parseFloat(ratio) * 15, 100)}%` }}
                   transition={{ duration: 0.6, ease: "easeOut" }}
                 />
               </div>
+              <FieldHint text="Observed ÷ Baseline — how strong the signal is relative to normal" />
             </div>
 
             {/* Metrics Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
                 <label className="text-xs font-semibold uppercase tracking-wider text-gray-300">
-                  💰 AOV (Rs)
+                  AOV (₹)
                 </label>
-                <input
-                  type="number"
-                  className="w-full"
-                  value={payload.merchant.avg_order_value}
-                  onChange={(e) =>
-                    setPayload((prev) => ({
-                      ...prev,
-                      merchant: {
-                        ...prev.merchant,
-                        avg_order_value: Math.min(100_000, Math.max(0, Number(e.target.value))),
-                      },
-                    }))
-                  }
-                />
+                {numericInput(
+                  payload.merchant.avg_order_value,
+                  (v) => setPayload((p) => ({ ...p, merchant: { ...p.merchant, avg_order_value: v } })),
+                  1, 100_000
+                )}
+                <FieldHint text="Average order value in rupees" />
+                {fieldErrors.aov && <FieldError text={fieldErrors.aov} />}
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <label className="text-xs font-semibold uppercase tracking-wider text-gray-300">
-                  📈 Weekly Orders
+                  Weekly Orders
                 </label>
-                <input
-                  type="number"
-                  className="w-full"
-                  value={payload.merchant.weekly_orders}
-                  onChange={(e) =>
-                    setPayload((prev) => ({
-                      ...prev,
-                      merchant: {
-                        ...prev.merchant,
-                        weekly_orders: Math.min(50_000, Math.max(0, Number(e.target.value))),
-                      },
-                    }))
-                  }
-                />
+                {numericInput(
+                  payload.merchant.weekly_orders,
+                  (v) => setPayload((p) => ({ ...p, merchant: { ...p.merchant, weekly_orders: v } })),
+                  1, 50_000
+                )}
+                <FieldHint text="Total orders placed in the last 7 days" />
+                {fieldErrors.weekly_orders && <FieldError text={fieldErrors.weekly_orders} />}
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <label className="text-xs font-semibold uppercase tracking-wider text-gray-300">
-                  📊 Observed
+                  Observed Value
                 </label>
-                <input
-                  type="number"
-                  className="w-full"
-                  value={payload.trigger.observed_value}
-                  onChange={(e) =>
-                    setPayload((prev) => ({
-                      ...prev,
-                      trigger: {
-                        ...prev.trigger,
-                        observed_value: Math.min(100_000, Math.max(0, Number(e.target.value))),
-                      },
-                    }))
-                  }
-                />
+                {numericInput(
+                  payload.trigger.observed_value,
+                  (v) => setPayload((p) => ({ ...p, trigger: { ...p.trigger, observed_value: v } })),
+                  1, 100_000
+                )}
+                <FieldHint text="Current metric reading (e.g. orders in last 3 hrs)" />
+                {fieldErrors.observed && <FieldError text={fieldErrors.observed} />}
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <label className="text-xs font-semibold uppercase tracking-wider text-gray-300">
-                  📍 Baseline
+                  Baseline Value
                 </label>
-                <input
-                  type="number"
-                  className="w-full"
-                  value={payload.trigger.baseline_value}
-                  onChange={(e) =>
-                    setPayload((prev) => ({
-                      ...prev,
-                      trigger: {
-                        ...prev.trigger,
-                        baseline_value: Math.min(100_000, Math.max(1, Number(e.target.value))),
-                      },
-                    }))
-                  }
-                />
+                {numericInput(
+                  payload.trigger.baseline_value,
+                  (v) => setPayload((p) => ({ ...p, trigger: { ...p.trigger, baseline_value: v } })),
+                  1, 100_000
+                )}
+                <FieldHint text="Normal expected value for the same window" />
+                {fieldErrors.baseline && <FieldError text={fieldErrors.baseline} />}
               </div>
             </div>
 
@@ -255,18 +296,18 @@ export default function ComposeSimulator() {
               type="button"
               onClick={onRun}
               disabled={loading}
-              whileHover={{ scale: 1.05, y: -2 }}
-              whileTap={{ scale: 0.95 }}
-              className="btn-primary w-full relative overflow-hidden group"
+              whileHover={{ scale: 1.03, y: -1 }}
+              whileTap={{ scale: 0.97 }}
+              className="btn-primary w-full relative overflow-hidden group py-3 rounded-xl font-semibold text-sm"
             >
               <div className="absolute inset-0 opacity-0 group-hover:opacity-20 bg-white transition-opacity" />
               {loading ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center gap-2">
                   <div className="h-4 w-4 rounded-full border-2 border-dark-bg border-t-white animate-spin" />
-                  Composing...
+                  Running decision…
                 </div>
               ) : (
-                "Run Compose Decision"
+                "Run Growth Decision"
               )}
             </motion.button>
 
@@ -274,7 +315,7 @@ export default function ComposeSimulator() {
               <motion.p
                 initial={{ opacity: 0, y: -5 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-sm text-red-400 bg-red-500/10 rounded-lg px-4 py-2 border border-red-500/20"
+                className="text-sm text-red-400 bg-red-500/10 rounded-lg px-4 py-3 border border-red-500/20"
               >
                 {error}
               </motion.p>
@@ -282,7 +323,7 @@ export default function ComposeSimulator() {
           </div>
         </motion.section>
 
-        {/* Right Panel - Output */}
+        {/* Right Panel */}
         <OutputPanel output={output} loading={loading} />
       </div>
     </div>
