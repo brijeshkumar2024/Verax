@@ -22,7 +22,7 @@ def build_rationale(
 
     return [
         f"🎯 Trigger: {ctx.trigger_type} ({trig.semantic_label})",
-        f"⚡ Opportunity: {plan.estimated_customers} local buyers in {ctx.city}",
+        f"⚠️ Impact: potential loss of {plan.estimated_customers} buyers in {ctx.city}" if ctx.trigger_type == "rating_dip" else f"⚡ Opportunity: {plan.estimated_customers} local buyers in {ctx.city}",
         f"👤 Merchant: rating {ctx.rating:.1f} with {plan.promo_pct}% offer relevance",
         f"💡 Strategy: {strategy} → {cta_type}",
         f"📊 Confidence: {confidence}",

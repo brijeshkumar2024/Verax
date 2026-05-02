@@ -5,7 +5,9 @@ from app.schemas import ComposeRequest
 
 
 def normalize_context(payload: ComposeRequest) -> NormalizedContext:
-    trigger_ratio = payload.trigger.observed_value / payload.trigger.baseline_value
+    observed = min(payload.trigger.observed_value, 100_000)
+    baseline = min(max(payload.trigger.baseline_value, 1), 100_000)
+    trigger_ratio = max(0.1, min(10.0, observed / baseline))
     customer = payload.customer
 
     return NormalizedContext(
@@ -13,8 +15,8 @@ def normalize_context(payload: ComposeRequest) -> NormalizedContext:
         merchant_name=payload.merchant.name.strip(),
         category=payload.category,
         city=payload.merchant.city.strip(),
-        aov=round(payload.merchant.avg_order_value, 2),
-        weekly_orders=payload.merchant.weekly_orders,
+        aov=round(min(payload.merchant.avg_order_value, 100_000), 2),
+        weekly_orders=min(payload.merchant.weekly_orders, 50_000),
         conversion_rate=payload.merchant.conversion_rate,
         repeat_rate=payload.merchant.repeat_customer_rate,
         rating=payload.merchant.rating,

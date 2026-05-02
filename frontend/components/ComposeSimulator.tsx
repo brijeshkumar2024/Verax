@@ -77,7 +77,8 @@ export default function ComposeSimulator() {
       setOutput(res);
     } catch (err) {
       console.error("API ERROR:", err);
-      setError("Backend not reachable");
+      setOutput(null);
+      setError("Connection timeout. Check backend is running and retry.");
     } finally {
       setLoading(false);
     }
@@ -181,7 +182,7 @@ export default function ComposeSimulator() {
                       ...prev,
                       merchant: {
                         ...prev.merchant,
-                        avg_order_value: Number(e.target.value),
+                        avg_order_value: Math.min(100_000, Math.max(0, Number(e.target.value))),
                       },
                     }))
                   }
@@ -201,7 +202,7 @@ export default function ComposeSimulator() {
                       ...prev,
                       merchant: {
                         ...prev.merchant,
-                        weekly_orders: Number(e.target.value),
+                        weekly_orders: Math.min(50_000, Math.max(0, Number(e.target.value))),
                       },
                     }))
                   }
@@ -221,7 +222,7 @@ export default function ComposeSimulator() {
                       ...prev,
                       trigger: {
                         ...prev.trigger,
-                        observed_value: Number(e.target.value),
+                        observed_value: Math.min(100_000, Math.max(0, Number(e.target.value))),
                       },
                     }))
                   }
@@ -241,7 +242,7 @@ export default function ComposeSimulator() {
                       ...prev,
                       trigger: {
                         ...prev.trigger,
-                        baseline_value: Number(e.target.value),
+                        baseline_value: Math.min(100_000, Math.max(1, Number(e.target.value))),
                       },
                     }))
                   }

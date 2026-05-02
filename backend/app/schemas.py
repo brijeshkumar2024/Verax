@@ -22,8 +22,8 @@ class MerchantInput(BaseModel):
     name: str
     category: CategoryType
     city: str
-    avg_order_value: float = Field(ge=50, le=10000)
-    weekly_orders: int = Field(ge=0, le=100000)
+    avg_order_value: float = Field(ge=0, le=100_000)
+    weekly_orders: int = Field(ge=0, le=500_000)
     conversion_rate: float = Field(ge=0.0, le=1.0)
     repeat_customer_rate: float = Field(ge=0.0, le=1.0)
     rating: float = Field(ge=1.0, le=5.0)

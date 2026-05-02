@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion } from "framer-motion";
 
 export function Header() {
@@ -11,19 +12,29 @@ export function Header() {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, ease: "easeOut" }}
-            className="space-y-1"
+            className="flex items-center gap-4"
           >
-            <div className="flex items-baseline gap-3">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-300 via-emerald-400 to-cyan-400 bg-clip-text text-transparent">
-                VERAX
-              </h1>
-              <span className="text-xs font-semibold uppercase tracking-widest text-emerald-500/70">
-                v1.0
-              </span>
+            <Image
+              src="/logo.png"
+              alt="VERAX Logo"
+              width={48}
+              height={48}
+              priority
+              className="w-10 h-10 md:w-12 md:h-12 rounded-md shadow-[0_0_20px_rgba(33,217,120,0.35)] hover:scale-105 transition-transform duration-200"
+            />
+            <div className="space-y-1">
+              <div className="flex items-baseline gap-3">
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-300 via-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                  VERAX
+                </h1>
+                <span className="text-xs font-semibold uppercase tracking-widest text-emerald-500/70">
+                  v1.0
+                </span>
+              </div>
+              <p className="text-sm text-gray-400 font-light">
+                Deterministic AI Decision Engine for Merchant Growth
+              </p>
             </div>
-            <p className="text-sm text-gray-400 font-light">
-              Deterministic AI Decision Engine for Merchant Growth
-            </p>
           </motion.div>
           <div className="mt-4 h-px w-24 bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-60" />
         </div>
