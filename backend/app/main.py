@@ -11,6 +11,7 @@ from app.engine.trigger_normalizer import normalize_trigger, select_dominant_tri
 from app.schemas import (
     ComposeRequest,
     ComposeResponse,
+    ContextEnvelope,
     ContextRequest,
     MetadataResponse,
     ReplyRequest,
@@ -86,12 +87,17 @@ def metadata() -> MetadataResponse:
 
 
 @app.post("/v1/context")
-def set_context(payload: ContextRequest) -> dict:
-    state.set_context(payload.merchant_id, payload.memory)
+def set_context(payload: ContextEnvelope | ContextRequest) -> dict:
+    """Accepts both challenge envelope format and legacy merchant_id format."""
+    if isinstance(payload, ContextEnvelope):
+        req = payload.to_context_request()
+    else:
+        req = payload
+    state.set_context(req.merchant_id, req.memory)
     return {
         "status": "context_updated",
-        "merchant_id": payload.merchant_id,
-        "keys_set": list(payload.memory.keys()),
+        "merchant_id": req.merchant_id,
+        "keys_set": list(req.memory.keys()),
     }
 
 

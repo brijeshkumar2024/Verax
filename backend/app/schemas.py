@@ -18,16 +18,16 @@ TriggerType = Literal[
 
 
 class MerchantInput(BaseModel):
-    merchant_id: str
-    name: str
+    merchant_id: str = Field(default="m_default", description="Merchant identifier. Auto-assigned if not provided.")
+    name: str = Field(default="Merchant")
     category: CategoryType
-    city: str
+    city: str = Field(default="India")
     avg_order_value: float = Field(gt=0, le=100_000, description="Average order value in Rs. Must be > 0.")
     weekly_orders: int = Field(gt=0, le=500_000, description="Weekly order volume. Must be > 0.")
-    conversion_rate: float = Field(ge=0.0, le=1.0)
-    repeat_customer_rate: float = Field(ge=0.0, le=1.0)
-    rating: float = Field(ge=1.0, le=5.0)
-    margin_pct: float = Field(ge=0.0, le=0.9)
+    conversion_rate: float = Field(ge=0.0, le=1.0, default=0.15)
+    repeat_customer_rate: float = Field(ge=0.0, le=1.0, default=0.3)
+    rating: float = Field(ge=1.0, le=5.0, default=4.0)
+    margin_pct: float = Field(ge=0.0, le=0.9, default=0.25)
 
 
 class TriggerInput(BaseModel):
@@ -35,7 +35,7 @@ class TriggerInput(BaseModel):
     observed_value: float = Field(ge=0, description="Observed metric value. Must be >= 0.")
     baseline_value: float = Field(gt=0, description="Baseline metric value. Must be > 0.")
     window_minutes: int = Field(default=180, ge=15, le=1440)
-    timestamp_utc: str
+    timestamp_utc: str = Field(default="2026-01-01T00:00:00Z")
 
     @field_validator("timestamp_utc")
     @classmethod
@@ -88,6 +88,18 @@ class ComposeResponse(BaseModel):
 class ContextRequest(BaseModel):
     merchant_id: str
     memory: Dict[str, str] = Field(default_factory=dict)
+
+
+# Challenge-format /v1/context — accepts scope/context_id/payload envelope
+class ContextEnvelope(BaseModel):
+    scope: str = "merchant"
+    context_id: str
+    version: int = 1
+    payload: Dict[str, str] = Field(default_factory=dict)
+    delivered_at: Optional[str] = None
+
+    def to_context_request(self) -> "ContextRequest":
+        return ContextRequest(merchant_id=self.context_id, memory=self.payload)
 
 
 class TickRequest(BaseModel):
