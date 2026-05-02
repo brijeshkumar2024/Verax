@@ -152,8 +152,7 @@ export default function ComposeSimulator() {
       `Message: ${output.message}`,
       `CTA: ${output.cta}`,
       `Score: ${output.decision_score}/100`,
-      `Reasoning:`,
-      ...(output.rationale ?? []).map((r) => `  • ${r}`),
+      `Reasoning: ${output.rationale}`,
       ``,
       `Decision computed using trigger intensity, merchant performance, and category benchmarks.`,
     ].join("\n");

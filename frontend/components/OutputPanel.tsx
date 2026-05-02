@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Category, ComposeResponse } from "../lib/types";
+import { Category, ComposeResponse, RuleTrace } from "../lib/types";
 import { LoadingSkeleton } from "./UIComponents";
 
 interface OutputPanelProps {
@@ -75,14 +75,16 @@ function confidenceLabel(score: number): { label: string; color: string; bg: str
 
 // ── Trigger context ──────────────────────────────────────────────────────────
 
-function extractTriggerContext(rationale: string[]): { trigger: string; opportunity: string; strategy: string } {
-  const triggerLine = rationale.find((r) => r.startsWith("🎯")) ?? "";
-  const oppLine = rationale.find((r) => r.startsWith("⚡")) ?? "";
-  const stratLine = rationale.find((r) => r.startsWith("💡")) ?? "";
+function extractTriggerContext(rationale: string): { trigger: string; opportunity: string; strategy: string } {
+  // rationale is a pipe-separated string: "Trigger: spike | Signal: ... | Opportunity: ... | Strategy: ..."
+  const parts = rationale.split(" | ");
+  const triggerPart = parts.find((p) => p.startsWith("Trigger:")) ?? "";
+  const oppPart = parts.find((p) => p.startsWith("Opportunity:") || p.startsWith("Impact:")) ?? "";
+  const stratPart = parts.find((p) => p.startsWith("Strategy:")) ?? "";
   return {
-    trigger: triggerLine.replace("🎯 Trigger: ", "").trim(),
-    opportunity: oppLine.replace("⚡ Opportunity: ", "").trim(),
-    strategy: stratLine.replace("💡 Strategy: ", "").trim(),
+    trigger: triggerPart.replace("Trigger: ", "").trim(),
+    opportunity: oppPart.replace("Opportunity: ", "").replace("Impact: ", "").trim(),
+    strategy: stratPart.replace("Strategy: ", "").trim(),
   };
 }
 
@@ -316,7 +318,13 @@ export default function OutputPanel({
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.38 }}
             className="glass rounded-xl p-4 border border-violet-500/20 space-y-2">
             <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">Rule Chain Applied</p>
-            <p className="text-xs font-mono text-violet-300 leading-relaxed break-all">{output.rule_trace}</p>
+            <div className="text-xs font-mono text-violet-300 space-y-1">
+              <p><span className="text-gray-500">trigger</span> → {output.rule_trace.trigger_type}</p>
+              <p><span className="text-gray-500">signal</span> → {output.rule_trace.dominant_signal} (deviation {output.rule_trace.deviation_pct > 0 ? "+" : ""}{output.rule_trace.deviation_pct}%)</p>
+              <p><span className="text-gray-500">priority</span> → {output.rule_trace.priority}</p>
+              <p><span className="text-gray-500">strategy</span> → {output.rule_trace.strategy}</p>
+              <p><span className="text-gray-500">intent</span> {output.rule_trace.intent_score} · <span className="text-gray-500">urgency</span> {output.rule_trace.urgency_score}</p>
+            </div>
             <p className="text-xs text-gray-600">Every token in this chain is a deterministic rule — no model, no sampling, no randomness.</p>
           </motion.div>
         )}
@@ -366,12 +374,12 @@ export default function OutputPanel({
         </motion.div>
 
         {/* Decision Reasoning */}
-        {output.rationale && output.rationale.length > 0 && (
+        {output.rationale && (
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.52 }}
             className="glass rounded-xl p-4 border border-emerald-500/20 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Decision Reasoning</p>
             <div className="space-y-2">
-              {output.rationale.map((r, i) => (
+              {output.rationale.split(" | ").map((r, i) => (
                 <div key={i} className="flex items-start gap-2.5 text-sm text-gray-300">
                   <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
                   <span>{r}</span>

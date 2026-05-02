@@ -40,13 +40,23 @@ export type ComposePayload = {
   };
 };
 
+export type RuleTrace = {
+  trigger_type: string;
+  dominant_signal: string;
+  priority: string;
+  strategy: string;
+  deviation_pct: number;
+  intent_score: number;
+  urgency_score: number;
+};
+
 export type ComposeResponse = {
   message: string;
   cta: string;
   send_as: "vera" | "system" | "merchant";
   suppression_key: string;
   suppressed: boolean;
-  rationale: string[];
+  rationale: string;          // backend returns pipe-joined string
   decision_score: number;
   score_components?: {
     decision_quality: number;
@@ -55,5 +65,5 @@ export type ComposeResponse = {
     merchant_fit: number;
     engagement: number;
   };
-  rule_trace?: string;
+  rule_trace?: RuleTrace;
 };
