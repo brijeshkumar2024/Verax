@@ -1,25 +1,36 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ComposeResponse } from "../lib/types";
+import { Category, ComposeResponse } from "../lib/types";
 import { LoadingSkeleton } from "./UIComponents";
 
 interface OutputPanelProps {
   output: ComposeResponse | null;
   loading?: boolean;
+  latencyMs?: number | null;
+  onCopy?: () => void;
+  copied?: boolean;
+  triggerStrength?: number;
+  category?: Category;
+  observedValue?: number;
+  baselineValue?: number;
 }
 
-// Format large INR values for Indian context
+// ── Formatters ──────────────────────────────────────────────────────────────
+
+function safe(v: number): number {
+  return isNaN(v) || !isFinite(v) ? 0 : v;
+}
+
 function formatINR(n: number): string {
-  if (isNaN(n) || !isFinite(n)) return "₹—";
-  if (n >= 10_00_000) return `₹${(n / 10_00_000).toFixed(1)}Cr`;
-  if (n >= 1_00_000) return `₹${(n / 1_00_000).toFixed(1)}L`;
-  if (n >= 10_000) return `₹${(n / 1_000).toFixed(0)}K`;
-  return `₹${n.toLocaleString("en-IN")}`;
+  const v = safe(n);
+  if (v >= 10_00_000) return `₹${(v / 10_00_000).toFixed(1)}Cr`;
+  if (v >= 1_00_000) return `₹${(v / 1_00_000).toFixed(1)}L`;
+  if (v >= 1_000) return `₹${v.toLocaleString("en-IN")}`;
+  return `₹${v}`;
 }
 
 function formatMessageNumbers(text: string): string {
-  // Replace bare ₹NNNN with formatted version, keep % and user counts highlighted
   return text
     .replace(/₹([\d,]+)/g, (_, num) => {
       const n = parseInt(num.replace(/,/g, ""), 10);
@@ -31,12 +42,11 @@ function formatMessageNumbers(text: string): string {
     .replace(/(\d+)%/g, (m) => `<span class="font-bold text-emerald-300">${m}</span>`);
 }
 
+// ── Score bar ────────────────────────────────────────────────────────────────
+
 function ScoreBar({ label, value }: { label: string; value: number }) {
-  const pct = Math.max(0, Math.min(10, Math.round(value))) * 10;
-  const color =
-    pct >= 80 ? "from-emerald-400 to-cyan-400"
-    : pct >= 50 ? "from-amber-400 to-yellow-300"
-    : "from-red-400 to-orange-400";
+  const pct = Math.max(0, Math.min(10, Math.round(safe(value)))) * 10;
+  const color = pct >= 80 ? "from-emerald-400 to-cyan-400" : pct >= 50 ? "from-amber-400 to-yellow-300" : "from-red-400 to-orange-400";
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs text-gray-400">
@@ -55,13 +65,16 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
   );
 }
 
+// ── Confidence ───────────────────────────────────────────────────────────────
+
 function confidenceLabel(score: number): { label: string; color: string; bg: string } {
   if (score >= 75) return { label: "High Confidence", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" };
   if (score >= 50) return { label: "Moderate Confidence", color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/30" };
   return { label: "Low Confidence", color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" };
 }
 
-// Extract trigger type from rationale for context card
+// ── Trigger context ──────────────────────────────────────────────────────────
+
 function extractTriggerContext(rationale: string[]): { trigger: string; opportunity: string; strategy: string } {
   const triggerLine = rationale.find((r) => r.startsWith("🎯")) ?? "";
   const oppLine = rationale.find((r) => r.startsWith("⚡")) ?? "";
@@ -73,7 +86,6 @@ function extractTriggerContext(rationale: string[]): { trigger: string; opportun
   };
 }
 
-// Map trigger type string to a plain-English business context sentence
 function triggerContextSentence(triggerRaw: string): string {
   const t = triggerRaw.toLowerCase();
   if (t.includes("spike") || t.includes("demand surge")) return "A demand surge has been detected above your normal baseline. This is a high-intent window where buyers are actively searching — acting now captures revenue that would otherwise be missed.";
@@ -87,7 +99,75 @@ function triggerContextSentence(triggerRaw: string): string {
   return "A business signal has been detected that warrants a targeted growth action.";
 }
 
-export default function OutputPanel({ output, loading = false }: OutputPanelProps) {
+// ── Causal WHY sentence using actual input values ────────────────────────────
+
+function causalWhySentence(
+  triggerRaw: string,
+  observed: number,
+  baseline: number,
+  strength: number
+): string {
+  const delta = safe(((observed - baseline) / Math.max(baseline, 1)) * 100);
+  const absDelta = Math.abs(Math.round(delta));
+  const t = triggerRaw.toLowerCase();
+  const dir = delta >= 0 ? "above" : "below";
+
+  if (t.includes("spike") || t.includes("demand surge"))
+    return `Your observed signal (${observed}) is ${absDelta}% above baseline (${baseline}), indicating a ${strength.toFixed(1)}x demand surge. High-intent windows like this convert at 2–3× normal rates — a targeted push now captures buyers already in decision mode.`;
+  if (t.includes("drop"))
+    return `Your observed orders (${observed}) are ${absDelta}% below baseline (${baseline}). A ${strength.toFixed(1)}x drop signal indicates demand erosion that a recovery offer can reverse before it becomes a sustained trend.`;
+  if (t.includes("cart"))
+    return `Cart abandonment is running ${absDelta}% ${dir} your baseline (${baseline}). At a ${strength.toFixed(1)}x signal, a significant share of near-purchase intent is being lost — a small incentive now recovers this without discounting committed buyers.`;
+  if (t.includes("repeat") || t.includes("retention"))
+    return `Repeat visits are ${absDelta}% below your baseline (${baseline}). A ${strength.toFixed(1)}x retention signal means existing customers are drifting — re-engagement now costs far less than re-acquisition.`;
+  if (t.includes("competitor"))
+    return `Competitive pressure has pushed your signal ${absDelta}% ${dir} baseline (${baseline}). A ${strength.toFixed(1)}x competitive signal warrants proactive loyalty reinforcement before customers trial the new entrant.`;
+  if (t.includes("rating") || t.includes("trust"))
+    return `Your rating signal is ${absDelta}% below baseline (${baseline}). A ${strength.toFixed(1)}x trust erosion signal means conversion is actively declining — a recovery campaign now stops the compounding effect.`;
+  if (t.includes("inventory") || t.includes("expiry"))
+    return `Inventory pressure is ${absDelta}% above baseline (${baseline}). At ${strength.toFixed(1)}x, converting stock to revenue now avoids write-off losses and protects your margin.`;
+  if (t.includes("weekend"))
+    return `Weekend demand is ${absDelta}% ${dir} your baseline (${baseline}). A ${strength.toFixed(1)}x seasonal signal means this window is performing above average — a targeted push maximises the opportunity.`;
+  return `Signal is ${absDelta}% ${dir} baseline (${baseline}) at ${strength.toFixed(1)}x intensity. A targeted action now is warranted.`;
+}
+
+// ── Impact range formula ─────────────────────────────────────────────────────
+
+const categoryMultiplier: Record<Category, number> = {
+  restaurant: 1.2, gym: 1.0, salon: 1.1, dentist: 0.9, pharmacy: 0.95,
+};
+
+function impactRange(strength: number, category: Category): { low: number; high: number } {
+  const mult = categoryMultiplier[category] ?? 1.0;
+  const base = safe(strength) * mult * 8;
+  return {
+    low: Math.max(1, Math.round(base * 0.75)),
+    high: Math.max(2, Math.round(base * 1.25)),
+  };
+}
+
+// ── Decision basis footer ────────────────────────────────────────────────────
+
+function decisionBasisLine(strength: number, observed: number, baseline: number, category: Category): string {
+  const delta = safe(((observed - baseline) / Math.max(baseline, 1)) * 100);
+  const sign = delta >= 0 ? "+" : "";
+  return `Decision computed using trigger intensity (${strength.toFixed(1)}×), merchant performance delta (${sign}${Math.round(delta)}%), and ${category} category benchmarks.`;
+}
+
+// ── Main component ───────────────────────────────────────────────────────────
+
+export default function OutputPanel({
+  output,
+  loading = false,
+  latencyMs,
+  onCopy,
+  copied,
+  triggerStrength = 1,
+  category = "restaurant",
+  observedValue = 1,
+  baselineValue = 1,
+}: OutputPanelProps) {
+
   if (loading) {
     return (
       <motion.section
@@ -96,7 +176,13 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
         transition={{ duration: 0.6, delay: 0.2 }}
         className="glass rounded-2xl p-6 md:p-8 border border-emerald-500/10"
       >
-        <h2 className="text-xl font-bold text-white mb-6">Decision Output</h2>
+        <div className="flex items-center gap-3 mb-6">
+          <h2 className="text-xl font-bold text-white">Decision Output</h2>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 font-medium">
+            <span>🔒</span> Deterministic · Rule-based
+          </div>
+        </div>
+        <p className="text-sm text-gray-400 mb-4">Computing decision…</p>
         <LoadingSkeleton />
       </motion.section>
     );
@@ -115,24 +201,24 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
             <span className="text-emerald-400 text-xl">→</span>
           </div>
           <p className="text-gray-300 font-medium">Awaiting decision</p>
-          <p className="text-sm text-gray-500 max-w-xs">
-            Configure the merchant context on the left and run a growth decision.
-          </p>
+          <p className="text-sm text-gray-500 max-w-xs">Configure the merchant context on the left and run a growth decision.</p>
         </div>
       </motion.section>
     );
   }
 
-  const { label: confLabel, color: confColor, bg: confBg } = confidenceLabel(output.decision_score);
+  const { label: confLabel, color: confColor, bg: confBg } = confidenceLabel(safe(output.decision_score));
   const lines = output.message.split("\n").filter(Boolean);
   const actionLine = lines[0] ?? "";
   const { trigger, opportunity, strategy } = extractTriggerContext(output.rationale ?? []);
   const triggerContext = triggerContextSentence(trigger);
+  const causalWhy = causalWhySentence(trigger, observedValue, baselineValue, triggerStrength);
+  const { low: impactLow, high: impactHigh } = impactRange(triggerStrength, category);
+  const basisLine = decisionBasisLine(triggerStrength, observedValue, baselineValue, category);
 
-  // Extract revenue from message or CTA — resilient fallback
-  const revenueMatch = output.message.match(/₹(\d[\d,]*)/) ?? output.cta.match(/₹(\d[\d,]*)/);
+  // Revenue from message — resilient
+  const revenueMatch = output.message.match(/₹([\d,]+)/) ?? output.cta.match(/₹([\d,]+)/);
   const revenueRaw = revenueMatch ? parseInt(revenueMatch[1].replace(/,/g, ""), 10) : null;
-  // Only show impact card if revenue is meaningful (>1000 = not a promo %)
   const revenueFormatted = revenueRaw && revenueRaw > 1000 ? formatINR(revenueRaw) : null;
 
   return (
@@ -142,16 +228,23 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
       transition={{ duration: 0.6, delay: 0.2 }}
       className="glass rounded-2xl p-6 md:p-8 border border-emerald-500/10"
     >
-      {/* Header */}
-      <div className="flex items-start justify-between mb-5">
-        <div>
-          <h2 className="text-xl font-bold text-white">Decision Output</h2>
-          <p className="text-xs text-gray-500 mt-0.5">Deterministic · Explainable · Auditable</p>
-          <p className="text-xs text-gray-600 mt-1">Decision computed using trigger intensity, merchant performance, and category benchmarks.</p>
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between mb-5 gap-3 flex-wrap">
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl font-bold text-white">Decision Output</h2>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 font-medium flex-shrink-0"
+              title="Every output is computed from fixed rules. Same inputs always produce the same output.">
+              🔒 Deterministic · Rule-based
+            </div>
+          </div>
+          <p className="text-xs text-gray-600">Decision computed using trigger intensity, merchant performance, and category benchmarks.</p>
         </div>
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold ${confBg} ${confColor}`}>
-          <span className="h-1.5 w-1.5 rounded-full bg-current" />
-          {confLabel} · {output.decision_score}/100
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold ${confBg} ${confColor}`}>
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {confLabel} · {safe(output.decision_score)}/100
+          </div>
         </div>
       </div>
 
@@ -172,40 +265,24 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
       <div className="space-y-4">
 
         {/* 1. WHY THIS TRIGGER MATTERS */}
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="glass rounded-xl p-4 border border-cyan-500/20 space-y-2"
-        >
-          <div className="flex items-center justify-between">
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
+          className="glass rounded-xl p-4 border border-cyan-500/20 space-y-2">
+          <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-widest text-cyan-400">Why This Trigger Matters</p>
-            {trigger && (
-              <span className="text-xs text-gray-500 font-mono bg-white/5 px-2 py-0.5 rounded">
-                {trigger.split(" ")[0]}
-              </span>
-            )}
+            {trigger && <span className="text-xs text-gray-500 font-mono bg-white/5 px-2 py-0.5 rounded flex-shrink-0">{trigger.split(" ")[0]}</span>}
           </div>
           <p className="text-sm text-gray-300 leading-relaxed">{triggerContext}</p>
-          {opportunity && (
-            <p className="text-xs text-gray-500">Signal: <span className="text-gray-400">{opportunity}</span></p>
-          )}
+          {opportunity && <p className="text-xs text-gray-500">Signal: <span className="text-gray-400">{opportunity}</span></p>}
         </motion.div>
 
         {/* 2. RECOMMENDED ACTION */}
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.28 }}
-          className="gradient-border rounded-xl p-5 space-y-3"
-        >
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }}
+          className="gradient-border rounded-xl p-5 space-y-3">
           <p className="text-xs font-semibold uppercase tracking-widest text-emerald-400">Recommended Action</p>
-          <p
-            className="text-base text-white leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: formatMessageNumbers(actionLine) }}
-          />
-          <div className="pt-2 border-t border-white/5 flex items-start gap-3">
-            <div className="flex-1">
+          <p className="text-base text-white leading-relaxed font-medium"
+            dangerouslySetInnerHTML={{ __html: formatMessageNumbers(actionLine) }} />
+          <div className="pt-2 border-t border-white/5 flex items-start gap-3 flex-wrap">
+            <div className="flex-1 min-w-0">
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Next Step</p>
               <p className="text-sm font-medium text-white">{output.cta}</p>
             </div>
@@ -218,64 +295,61 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
           </div>
         </motion.div>
 
-        {/* 3. EXPECTED IMPACT */}
-        {revenueFormatted && (
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.36 }}
-            className="glass rounded-xl p-4 border border-emerald-500/20"
-          >
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-              Expected Impact{" "}
-              <span className="normal-case tracking-normal font-normal text-gray-600">(Estimated)</span>
-            </p>
-            <div className="flex items-center gap-6">
-              <div>
-                <div className="text-2xl font-bold text-emerald-300">{revenueFormatted}</div>
-                <div className="text-xs text-gray-500 mt-0.5">Estimated revenue opportunity</div>
-              </div>
-              <div className="h-10 w-px bg-white/10" />
-              <div className="text-xs text-gray-400 leading-relaxed max-w-xs">
-                Based on reachable buyers in your area, your average order value, and the applied offer discount.
-                Actual results will vary.
-              </div>
-            </div>
-          </motion.div>
-        )}
+        {/* 3. WHY (causal, with actual values) */}
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.33 }}
+          className="glass rounded-xl p-4 border border-emerald-500/20 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Why This Decision</p>
+          <p className="text-sm text-gray-300 leading-relaxed">{causalWhy}</p>
+        </motion.div>
 
-        {/* 4. HOW TO EXECUTE */}
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.42 }}
-          className="glass rounded-xl p-4 border border-emerald-500/20 space-y-2"
-        >
+        {/* 4. EXPECTED IMPACT */}
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.40 }}
+          className="glass rounded-xl p-4 border border-emerald-500/20 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+            Expected Impact <span className="normal-case tracking-normal font-normal text-gray-600">(Estimated)</span>
+          </p>
+          <div className="flex items-start gap-4 flex-wrap">
+            <div>
+              <div className="text-lg font-bold text-emerald-300">+{impactLow}% to +{impactHigh}%</div>
+              <div className="text-xs text-gray-500 mt-0.5">Estimated outcome within 7–10 days</div>
+            </div>
+            {revenueFormatted && (
+              <>
+                <div className="h-8 w-px bg-white/10 self-center hidden sm:block" />
+                <div>
+                  <div className="text-lg font-bold text-cyan-300">{revenueFormatted}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">Revenue opportunity</div>
+                </div>
+              </>
+            )}
+            <div className="text-xs text-gray-500 leading-relaxed flex-1 min-w-[160px]">
+              Based on trigger strength ({triggerStrength.toFixed(1)}×) and {category} category benchmarks. Actual results will vary.
+            </div>
+          </div>
+        </motion.div>
+
+        {/* 5. HOW TO EXECUTE */}
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.46 }}
+          className="glass rounded-xl p-4 border border-emerald-500/20 space-y-2">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">How to Execute</p>
           <ol className="space-y-1.5 text-sm text-gray-300">
-            <li className="flex items-start gap-2.5">
-              <span className="flex-shrink-0 w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center font-bold mt-0.5">1</span>
-              <span>Review the recommended message and confirm it fits your current context.</span>
-            </li>
-            <li className="flex items-start gap-2.5">
-              <span className="flex-shrink-0 w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center font-bold mt-0.5">2</span>
-              <span>Send via your preferred channel — push notification, WhatsApp, or in-app message.</span>
-            </li>
-            <li className="flex items-start gap-2.5">
-              <span className="flex-shrink-0 w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center font-bold mt-0.5">3</span>
-              <span>Monitor order volume over the next 3 hours. VERAX suppresses repeat messages automatically.</span>
-            </li>
+            {[
+              "Review the recommended message and confirm it fits your current context.",
+              "Send via your preferred channel — push notification, WhatsApp, or in-app message.",
+              "Monitor order volume over the next 3 hours. VERAX suppresses repeat messages automatically.",
+            ].map((step, i) => (
+              <li key={i} className="flex items-start gap-2.5">
+                <span className="flex-shrink-0 w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center font-bold mt-0.5">{i + 1}</span>
+                <span>{step}</span>
+              </li>
+            ))}
           </ol>
         </motion.div>
 
-        {/* 5. WHY THIS DECISION (rationale) */}
+        {/* Decision Reasoning */}
         {output.rationale && output.rationale.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.48 }}
-            className="glass rounded-xl p-4 border border-emerald-500/20 space-y-3"
-          >
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.52 }}
+            className="glass rounded-xl p-4 border border-emerald-500/20 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Decision Reasoning</p>
             <div className="space-y-2">
               {output.rationale.map((r, i) => (
@@ -288,14 +362,10 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
           </motion.div>
         )}
 
-        {/* 6. CONFIDENCE BREAKDOWN */}
+        {/* Confidence Breakdown */}
         {output.score_components && (
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.52 }}
-            className="glass rounded-xl p-4 border border-emerald-500/20 space-y-3"
-          >
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.56 }}
+            className="glass rounded-xl p-4 border border-emerald-500/20 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Confidence Breakdown</p>
             <div className="space-y-2.5">
               <ScoreBar label="Decision Quality" value={output.score_components.decision_quality} />
@@ -307,19 +377,28 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
           </motion.div>
         )}
 
-        {/* Footer credibility */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.56 }}
-          className="space-y-1.5 px-1"
-        >
-          <p className="text-xs text-gray-500 leading-relaxed">
-            Decision computed using trigger intensity, merchant performance, and category benchmarks. No randomness — identical inputs always produce identical outputs.
-          </p>
-          <div className="flex items-center justify-between text-xs text-gray-600">
-            <span>Persona: <span className="text-gray-400">{output.send_as}</span></span>
-            <span className="font-mono">{output.suppression_key}</span>
+        {/* Footer */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
+          className="space-y-2 px-1">
+          <p className="text-xs text-gray-500 leading-relaxed">{basisLine}</p>
+          <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-gray-600">
+            <div className="flex items-center gap-3">
+              <span>Persona: <span className="text-gray-400">{output.send_as}</span></span>
+              {latencyMs != null && (
+                <span className="text-emerald-600 font-medium">⚡ Computed in {latencyMs}ms</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono truncate max-w-[160px]">{output.suppression_key}</span>
+              {onCopy && (
+                <button
+                  onClick={onCopy}
+                  className="text-xs text-gray-500 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 rounded px-2 py-0.5 transition-colors"
+                >
+                  {copied ? "✓ Copied" : "Copy"}
+                </button>
+              )}
+            </div>
           </div>
           <p className="text-xs text-gray-600 italic">
             Try adjusting trigger strength or baseline to simulate alternative outcomes.
