@@ -137,15 +137,48 @@ def generate_variants(
     _,         cta1 = _cta(1)
     _,         cta2 = _cta(2)
 
-    # Line1 uses category_noun/category_action — never raw category label
-    TONE_LINE1: dict[str, str] = {
-        "sharp-growth":     f"{plan.estimated_customers} people in {ctx.city} are actively searching for {tone.category_noun} right now.",
-        "coach-driven":     f"{plan.estimated_customers} people in {ctx.city} are actively looking to {tone.category_action} right now.",
-        "premium-friendly": f"{plan.estimated_customers} style-seekers in {ctx.city} are actively browsing {tone.category_noun} right now.",
-        "clinical-trust":   f"{plan.estimated_customers} people in {ctx.city} are actively seeking {tone.category_noun} today.",
-        "care-urgent":      f"{plan.estimated_customers} customers in {ctx.city} need to {tone.category_action} right now.",
-        "neutral":          f"{plan.estimated_customers} potential customers in {ctx.city} are actively looking for {tone.category_noun} right now.",
+    # 4 deterministic intro structures rotated by (estimated_customers % 4)
+    # Prevents lexical monotony across repeated ticks with same tone
+    _INTROS: dict[str, list[str]] = {
+        "sharp-growth": [
+            f"{plan.estimated_customers} people in {ctx.city} are actively searching for {tone.category_noun} right now.",
+            f"Right now, {plan.estimated_customers} buyers in {ctx.city} are looking for {tone.category_noun}.",
+            f"{tone.category_noun.capitalize()} demand is live — {plan.estimated_customers} people in {ctx.city} are searching.",
+            f"There are {plan.estimated_customers} active buyers in {ctx.city} looking for {tone.category_noun} today.",
+        ],
+        "coach-driven": [
+            f"{plan.estimated_customers} people in {ctx.city} are actively looking to {tone.category_action} right now.",
+            f"Right now, {plan.estimated_customers} people in {ctx.city} want to {tone.category_action}.",
+            f"{plan.estimated_customers} motivated members in {ctx.city} are ready to {tone.category_action}.",
+            f"There are {plan.estimated_customers} people in {ctx.city} looking to {tone.category_action} today.",
+        ],
+        "premium-friendly": [
+            f"{plan.estimated_customers} style-seekers in {ctx.city} are actively browsing {tone.category_noun} right now.",
+            f"Right now, {plan.estimated_customers} people in {ctx.city} are browsing {tone.category_noun}.",
+            f"{plan.estimated_customers} potential clients in {ctx.city} are exploring {tone.category_noun} today.",
+            f"There are {plan.estimated_customers} style-seekers in {ctx.city} looking for {tone.category_noun}.",
+        ],
+        "clinical-trust": [
+            f"{plan.estimated_customers} people in {ctx.city} are actively seeking {tone.category_noun} today.",
+            f"Right now, {plan.estimated_customers} patients in {ctx.city} need {tone.category_noun}.",
+            f"{plan.estimated_customers} people in {ctx.city} are looking to book {tone.category_noun}.",
+            f"There are {plan.estimated_customers} patients in {ctx.city} searching for {tone.category_noun} today.",
+        ],
+        "care-urgent": [
+            f"{plan.estimated_customers} customers in {ctx.city} need to {tone.category_action} right now.",
+            f"Right now, {plan.estimated_customers} customers in {ctx.city} need {tone.category_noun}.",
+            f"{plan.estimated_customers} people in {ctx.city} are due for {tone.category_noun}.",
+            f"There are {plan.estimated_customers} customers in {ctx.city} who need to {tone.category_action} today.",
+        ],
+        "neutral": [
+            f"{plan.estimated_customers} potential customers in {ctx.city} are actively looking for {tone.category_noun} right now.",
+            f"Right now, {plan.estimated_customers} people in {ctx.city} are searching for {tone.category_noun}.",
+            f"{plan.estimated_customers} buyers in {ctx.city} are looking for {tone.category_noun} today.",
+            f"There are {plan.estimated_customers} active buyers in {ctx.city} interested in {tone.category_noun}.",
+        ],
     }
+    _intro_idx = plan.estimated_customers % 4
+    TONE_LINE1: dict[str, str] = {k: v[_intro_idx] for k, v in _INTROS.items()}
 
     if ctx.trigger_type == "rating_dip":
         line1_variants = [

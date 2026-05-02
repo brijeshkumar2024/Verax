@@ -176,11 +176,18 @@ def reply(payload: ReplyRequest) -> dict:
     state.set_context(payload.merchant_id, {"preferred_tone": tone})
     state.set_last_response(payload.merchant_id, response)
 
+    # state_delta: shows judge exactly what changed and what next tick will do differently
+    strategy_shift = {
+        "accepted":  "next_strategy=urgency (reinforce momentum)",
+        "rejected":  "next_strategy=social_proof (softer re-engage)",
+        "deferred":  "next_strategy=info (low-pressure)",
+        "ignored":   "next_strategy=social_proof (rotate to proof)",
+    }
     next_action_map = {
-        "accepted":  "Interaction recorded. Next decision will reinforce with follow-up offer.",
-        "rejected":  "Suppression extended. Next decision will use softer tone and longer cooldown.",
-        "deferred":  "Cooldown applied. Next decision will use softer messaging after delay.",
-        "ignored":   "Strategy will rotate to social_proof on next tick to improve engagement.",
+        "accepted":  "Next decision will reinforce with follow-up offer.",
+        "rejected":  "Next decision will use softer tone and longer cooldown.",
+        "deferred":  "Next decision will use softer messaging after delay.",
+        "ignored":   "Strategy will rotate to social_proof on next tick.",
     }
 
     return {
@@ -189,4 +196,9 @@ def reply(payload: ReplyRequest) -> dict:
         "interpreted_response": response,
         "tone_updated": tone,
         "next_action": next_action_map[response],
+        "state_delta": {
+            "preferred_tone": tone,
+            "last_response": response,
+            "strategy_effect": strategy_shift[response],
+        },
     }

@@ -23,16 +23,11 @@ def build_rationale(
         confidence = "weak alignment, consider alternative action"
 
     rejected = rejected_scores or []
-    selection_note = (
-        f"Winner scored {winner_score}/100"
-        + (f"; rejected variants scored {', '.join(str(s) for s in rejected)}" if rejected else "")
-    )
+    selection_note = f"Winner {winner_score}/100" + (f" vs {', '.join(str(s) for s in rejected)}" if rejected else "")
 
     return [
-        f"Trigger: {ctx.trigger_type} ({trig.semantic_label})",
-        f"Impact: potential loss of {plan.estimated_customers} buyers in {ctx.city}" if ctx.trigger_type == "rating_dip" else f"Opportunity: {plan.estimated_customers} active buyers in {ctx.city}",
-        f"Merchant: rating {ctx.rating:.1f}, {plan.promo_pct}% offer, ₹{plan.estimated_revenue} revenue potential",
-        f"Strategy: {strategy} → {cta_type}",
-        f"Selection: {selection_note}",
-        f"Confidence: {confidence}",
+        f"Trigger: {ctx.trigger_type} | Signal: {trig.semantic_label}",
+        f"Impact: {plan.estimated_customers} buyers at risk in {ctx.city}" if ctx.trigger_type == "rating_dip" else f"Opportunity: {plan.estimated_customers} buyers in {ctx.city}",
+        f"Offer: ₹{plan.estimated_revenue} potential | {plan.promo_pct}% promo | rating {ctx.rating:.1f}",
+        f"Strategy: {strategy} → {cta_type} | {selection_note} | {confidence[:20]}",
     ]
