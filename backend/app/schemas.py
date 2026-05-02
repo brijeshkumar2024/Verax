@@ -25,7 +25,7 @@ class MerchantInput(BaseModel):
     merchant_id: str = Field(default="m_default")
     name: str = Field(default="Merchant")
     category: CategoryType = Field(default=_DEFAULT_CATEGORY)
-    city: str = Field(default="India")
+    city: str = Field(default="your city")
     avg_order_value: float = Field(default=300.0, gt=0, le=100_000)
     weekly_orders: int = Field(default=500, gt=0, le=500_000)
     conversion_rate: float = Field(default=0.15, ge=0.0, le=1.0)
