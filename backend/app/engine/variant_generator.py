@@ -31,29 +31,29 @@ def _cta_for(
     fatigue_score: float,
     has_strong_offer: bool,
     estimated_customers: int,
-    cta_variant: int = 0,  # 0,1,2 — deterministic variation by variant index
+    cta_variant: int = 0,
 ) -> tuple[str, str]:
     if trigger_type == "rating_dip":
-        return "recover_trust", f"Run ₹{promo_pct} trust-recovery campaign to improve reviews now?"
+        return "recover_trust", f"Should I run a ₹{promo_pct} trust-recovery campaign to improve reviews?"
     if fatigue_score > 0.6:
         return "soft_nudge", f"Should I run a ₹{promo_pct} recovery offer today?"
     if trigger_type == "spike":
         _variants = [
-            f"Push ₹{promo_pct} offer to {estimated_customers} users now?",
-            f"Should I send ₹{promo_pct} offer to {estimated_customers} users?",
-            f"Want me to push ₹{promo_pct} offer to capture them now?",
+            f"Should I push ₹{promo_pct} offer to {estimated_customers} users now?",
+            f"Want me to send ₹{promo_pct} offer to {estimated_customers} users?",
+            f"Should I capture these {estimated_customers} users with a ₹{promo_pct} offer?",
         ]
         return "push_now", _variants[cta_variant % 3]
     if trigger_type == "drop":
         _variants = [
-            f"Run ₹{promo_pct} boost to recover orders now?",
-            f"Should I activate ₹{promo_pct} recovery offer today?",
-            f"Want me to run ₹{promo_pct} boost to win back orders?",
+            f"Should I run a ₹{promo_pct} boost to recover orders now?",
+            f"Want me to activate a ₹{promo_pct} recovery offer today?",
+            f"Should I push a ₹{promo_pct} boost to win back orders?",
         ]
         return "recover_drop", _variants[cta_variant % 3]
     if has_strong_offer:
-        return "activate_offer", f"Activate ₹{promo_pct} offer for today?"
-    return "soft_nudge", f"Run a ₹{promo_pct} recovery test today?"
+        return "activate_offer", f"Should I activate a ₹{promo_pct} offer for today?"
+    return "soft_nudge", f"Should I run a ₹{promo_pct} recovery test today?"
 
 
 def _line2(priority: str, city: str, trigger_label: str) -> str:
