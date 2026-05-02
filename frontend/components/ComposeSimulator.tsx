@@ -28,8 +28,8 @@ const triggerLabels: Record<TriggerType, string> = {
 const PRESETS: ComposePayload[] = [
   {
     category: "restaurant",
-    merchant: { merchant_id: "m_1021", name: "Biryani House", category: "restaurant", city: "Bengaluru", avg_order_value: 380, weekly_orders: 240, conversion_rate: 0.19, repeat_customer_rate: 0.27, rating: 3.8, margin_pct: 0.28 },
-    trigger: { type: "rating_dip", observed_value: 195, baseline_value: 240, window_minutes: 180, timestamp_utc: "2026-05-02T14:00:00Z" },
+    merchant: { merchant_id: "m_1021", name: "Biryani House", category: "restaurant", city: "Bengaluru", avg_order_value: 380, weekly_orders: 1400, conversion_rate: 0.19, repeat_customer_rate: 0.27, rating: 4.1, margin_pct: 0.28 },
+    trigger: { type: "spike", observed_value: 340, baseline_value: 150, window_minutes: 180, timestamp_utc: "2026-05-02T14:00:00Z" },
     customer: { customer_id: "c_991", loyalty_tier: "gold", visits_last_30d: 5, spend_last_30d: 2100, last_engagement_days: 4 },
   },
   {

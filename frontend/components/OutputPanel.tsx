@@ -68,8 +68,8 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
 // ── Confidence ───────────────────────────────────────────────────────────────
 
 function confidenceLabel(score: number): { label: string; color: string; bg: string } {
-  if (score >= 75) return { label: "High Confidence", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" };
-  if (score >= 50) return { label: "Moderate Confidence", color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/30" };
+  if (score >= 80) return { label: "High Confidence", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" };
+  if (score >= 60) return { label: "Moderate Confidence", color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/30" };
   return { label: "Low Confidence", color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" };
 }
 
@@ -101,34 +101,44 @@ function triggerContextSentence(triggerRaw: string): string {
 
 // ── Causal WHY sentence using actual input values ────────────────────────────
 
+// Format deviation: use % for ≤100%, ratio for larger deviations
+function formatDeviation(observed: number, baseline: number): string {
+  const pct = safe(((observed - baseline) / Math.max(baseline, 1)) * 100);
+  const absPct = Math.abs(pct);
+  const dir = pct >= 0 ? "above" : "below";
+  if (absPct > 100) {
+    const ratio = safe(observed / Math.max(baseline, 1));
+    return `${ratio.toFixed(1)}× deviation from baseline (${baseline})`;
+  }
+  return `${Math.round(absPct)}% ${dir} baseline (${baseline})`;
+}
+
 function causalWhySentence(
   triggerRaw: string,
   observed: number,
   baseline: number,
   strength: number
 ): string {
-  const delta = safe(((observed - baseline) / Math.max(baseline, 1)) * 100);
-  const absDelta = Math.abs(Math.round(delta));
+  const dev = formatDeviation(observed, baseline);
   const t = triggerRaw.toLowerCase();
-  const dir = delta >= 0 ? "above" : "below";
 
   if (t.includes("spike") || t.includes("demand surge"))
-    return `Your observed signal (${observed}) is ${absDelta}% above baseline (${baseline}), indicating a ${strength.toFixed(1)}x demand surge. High-intent windows like this convert at 2–3× normal rates — a targeted push now captures buyers already in decision mode.`;
+    return `Your observed signal (${observed}) is ${dev}, indicating a ${strength.toFixed(1)}× demand surge. High-intent windows like this convert at 2–3× normal rates — a targeted push now captures buyers already in decision mode.`;
   if (t.includes("drop"))
-    return `Your observed orders (${observed}) are ${absDelta}% below baseline (${baseline}). A ${strength.toFixed(1)}x drop signal indicates demand erosion that a recovery offer can reverse before it becomes a sustained trend.`;
+    return `Your observed orders (${observed}) are ${dev}. A ${strength.toFixed(1)}× drop signal indicates demand erosion that a recovery offer can reverse before it becomes a sustained trend.`;
   if (t.includes("cart"))
-    return `Cart abandonment is running ${absDelta}% ${dir} your baseline (${baseline}). At a ${strength.toFixed(1)}x signal, a significant share of near-purchase intent is being lost — a small incentive now recovers this without discounting committed buyers.`;
+    return `Cart abandonment is running ${dev}. At a ${strength.toFixed(1)}× signal, a significant share of near-purchase intent is being lost — a small incentive now recovers this without discounting committed buyers.`;
   if (t.includes("repeat") || t.includes("retention"))
-    return `Repeat visits are ${absDelta}% below your baseline (${baseline}). A ${strength.toFixed(1)}x retention signal means existing customers are drifting — re-engagement now costs far less than re-acquisition.`;
+    return `Repeat visits are ${dev}. A ${strength.toFixed(1)}× retention signal means existing customers are drifting — re-engagement now costs far less than re-acquisition.`;
   if (t.includes("competitor"))
-    return `Competitive pressure has pushed your signal ${absDelta}% ${dir} baseline (${baseline}). A ${strength.toFixed(1)}x competitive signal warrants proactive loyalty reinforcement before customers trial the new entrant.`;
+    return `Competitive pressure has pushed your signal ${dev}. A ${strength.toFixed(1)}× competitive signal warrants proactive loyalty reinforcement before customers trial the new entrant.`;
   if (t.includes("rating") || t.includes("trust"))
-    return `Your rating signal is ${absDelta}% below baseline (${baseline}). A ${strength.toFixed(1)}x trust erosion signal means conversion is actively declining — a recovery campaign now stops the compounding effect.`;
+    return `Your rating signal is ${dev}. A ${strength.toFixed(1)}× trust erosion signal means conversion is actively declining — a recovery campaign now stops the compounding effect.`;
   if (t.includes("inventory") || t.includes("expiry"))
-    return `Inventory pressure is ${absDelta}% above baseline (${baseline}). At ${strength.toFixed(1)}x, converting stock to revenue now avoids write-off losses and protects your margin.`;
+    return `Inventory pressure is ${dev}. At ${strength.toFixed(1)}×, converting stock to revenue now avoids write-off losses and protects your margin.`;
   if (t.includes("weekend"))
-    return `Weekend demand is ${absDelta}% ${dir} your baseline (${baseline}). A ${strength.toFixed(1)}x seasonal signal means this window is performing above average — a targeted push maximises the opportunity.`;
-  return `Signal is ${absDelta}% ${dir} baseline (${baseline}) at ${strength.toFixed(1)}x intensity. A targeted action now is warranted.`;
+    return `Weekend demand is ${dev}. A ${strength.toFixed(1)}× seasonal signal means this window is performing above average — a targeted push maximises the opportunity.`;
+  return `Signal is ${dev} at ${strength.toFixed(1)}× intensity. A targeted action now is warranted.`;
 }
 
 // ── Impact range formula ─────────────────────────────────────────────────────
@@ -149,9 +159,8 @@ function impactRange(strength: number, category: Category): { low: number; high:
 // ── Decision basis footer ────────────────────────────────────────────────────
 
 function decisionBasisLine(strength: number, observed: number, baseline: number, category: Category): string {
-  const delta = safe(((observed - baseline) / Math.max(baseline, 1)) * 100);
-  const sign = delta >= 0 ? "+" : "";
-  return `Decision computed using trigger intensity (${strength.toFixed(1)}×), merchant performance delta (${sign}${Math.round(delta)}%), and ${category} category benchmarks.`;
+  const dev = formatDeviation(observed, baseline);
+  return `Decision computed using trigger intensity (${strength.toFixed(1)}×), merchant performance ${dev}, and ${category} category benchmarks.`;
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -332,7 +341,7 @@ export default function OutputPanel({
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.46 }}
           className="glass rounded-xl p-4 border border-emerald-500/20 space-y-2">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">How to Execute</p>
-          <ol className="space-y-1.5 text-sm text-gray-300">
+          <ol className="space-y-1.5 text-sm text-gray-300 list-none">
             {[
               "Review the recommended message and confirm it fits your current context.",
               "Send via your preferred channel — push notification, WhatsApp, or in-app message.",
@@ -383,10 +392,10 @@ export default function OutputPanel({
           <p className="text-xs text-gray-500 leading-relaxed">{basisLine}</p>
           <div className="flex items-center justify-between flex-wrap gap-2 text-xs text-gray-600">
             <div className="flex items-center gap-3">
-              <span>Persona: <span className="text-gray-400">{output.send_as}</span></span>
               {latencyMs != null && (
                 <span className="text-emerald-600 font-medium">⚡ Computed in {latencyMs}ms</span>
               )}
+              <span className="text-gray-600">Generated by VERAX Engine</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="font-mono truncate max-w-[160px]">{output.suppression_key}</span>
