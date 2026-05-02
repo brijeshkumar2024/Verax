@@ -122,18 +122,16 @@ def score_variants(
             "engagement": _to_component_10(engage),
         }
 
-        final_score = int(
-            (
-                score_components["decision_quality"]
-                + score_components["specificity"]
-                + score_components["category_fit"]
-                + score_components["merchant_fit"]
-                + score_components["engagement"]
-            )
-            * 2
+        component_sum = (
+            score_components["decision_quality"]
+            + score_components["specificity"]
+            + score_components["category_fit"]
+            + score_components["merchant_fit"]
+            + score_components["engagement"]
         )
-        final_score -= penalty
-        final_score = max(0, min(100, final_score))
+        # Scale penalty proportionally: raw penalty is 0–100 range, scale to component space
+        scaled_penalty = round(penalty * 0.3)
+        final_score = max(0, min(100, (component_sum * 2) - scaled_penalty))
 
         scored.append(
             ScoredVariant(

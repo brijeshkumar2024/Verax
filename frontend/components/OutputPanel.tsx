@@ -357,10 +357,10 @@ export default function OutputPanel({
               "Send via your preferred channel — push notification, WhatsApp, or in-app message.",
               "Monitor order volume over the next 3 hours. VERAX suppresses repeat messages automatically.",
             ].map((step, i) => (
-              <li key={i} className="flex items-start gap-2.5">
+              <div key={i} className="flex items-start gap-2.5">
                 <span className="flex-shrink-0 w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center font-bold mt-0.5">{i + 1}</span>
                 <span>{step}</span>
-              </li>
+              </div>
             ))}
           </div>
         </motion.div>
