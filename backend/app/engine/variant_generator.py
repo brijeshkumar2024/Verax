@@ -31,19 +31,29 @@ def _cta_for(
     fatigue_score: float,
     has_strong_offer: bool,
     estimated_customers: int,
-    tone_voice: str = "",
+    cta_variant: int = 0,  # 0,1,2 — deterministic variation by variant index
 ) -> tuple[str, str]:
     if trigger_type == "rating_dip":
         return "recover_trust", f"Run ₹{promo_pct} trust-recovery campaign to improve reviews now?"
     if fatigue_score > 0.6:
-        return "soft_nudge", f"Run a low-pressure ₹{promo_pct} recovery test today?"
+        return "soft_nudge", f"Should I run a ₹{promo_pct} recovery offer today?"
     if trigger_type == "spike":
-        return "push_now", f"Push ₹{promo_pct} offer to {estimated_customers} users now?"
+        _variants = [
+            f"Push ₹{promo_pct} offer to {estimated_customers} users now?",
+            f"Should I send ₹{promo_pct} offer to {estimated_customers} users?",
+            f"Want me to push ₹{promo_pct} offer to capture them now?",
+        ]
+        return "push_now", _variants[cta_variant % 3]
     if trigger_type == "drop":
-        return "recover_drop", f"Run ₹{promo_pct} boost to recover orders now?"
+        _variants = [
+            f"Run ₹{promo_pct} boost to recover orders now?",
+            f"Should I activate ₹{promo_pct} recovery offer today?",
+            f"Want me to run ₹{promo_pct} boost to win back orders?",
+        ]
+        return "recover_drop", _variants[cta_variant % 3]
     if has_strong_offer:
         return "activate_offer", f"Activate ₹{promo_pct} offer for today?"
-    return "soft_nudge", f"Run a low-pressure ₹{promo_pct} recovery test today?"
+    return "soft_nudge", f"Run a ₹{promo_pct} recovery test today?"
 
 
 def _line2(priority: str, city: str, trigger_label: str) -> str:
@@ -67,109 +77,75 @@ def generate_variants(
     plan: DecisionPlan,
     send_as: str,
     strategy_type: str = "info",
+    recent_interaction_count: int = 0,
 ) -> List[Variant]:
     tone = get_tone(ctx.category)
     has_strong_offer = plan.promo_pct >= 14
     estimated_value = plan.estimated_revenue
-    cta_type, cta = _cta_for(
-        ctx.trigger_type,
-        plan.promo_pct,
-        fused.fatigue_score,
-        has_strong_offer,
-        plan.estimated_customers,
-        tone_voice=tone.voice,
-    )
     message_type = _message_type_for(strategy_type)
 
-    # Customer personalization prefix when context is available
+    # Customer personalization: only when low fatigue (< 3 recent interactions)
     customer_prefix = ""
-    if ctx.customer_loyalty and ctx.customer_loyalty in {"gold", "platinum"}:
-        customer_prefix = f"As a {ctx.customer_loyalty} member — "
-    elif ctx.visits_last_30d > 3:
-        customer_prefix = f"You've visited {ctx.visits_last_30d}x this month — "
+    if recent_interaction_count < 3:
+        if ctx.customer_loyalty and ctx.customer_loyalty in {"gold", "platinum"}:
+            customer_prefix = f"As a {ctx.customer_loyalty} member — "
+        elif ctx.visits_last_30d > 3:
+            customer_prefix = f"You've visited {ctx.visits_last_30d}x this month — "
 
-    # Category-specific tone with engagement language ("actively searching" > "ready")
+    # Build 3 CTAs with deterministic variation per variant index
+    cta_type, cta0 = _cta_for(ctx.trigger_type, plan.promo_pct, fused.fatigue_score, has_strong_offer, plan.estimated_customers, 0)
+    _,         cta1 = _cta_for(ctx.trigger_type, plan.promo_pct, fused.fatigue_score, has_strong_offer, plan.estimated_customers, 1)
+    _,         cta2 = _cta_for(ctx.trigger_type, plan.promo_pct, fused.fatigue_score, has_strong_offer, plan.estimated_customers, 2)
+
+    # Line1 uses category_noun/category_action — never raw category label
     TONE_LINE1: dict[str, str] = {
-        "sharp-growth":     f"{plan.estimated_customers} hungry buyers in {ctx.city} are actively searching for {ctx.category} right now.",
-        "coach-driven":     f"{plan.estimated_customers} members in {ctx.city} are actively looking to book a session right now.",
-        "premium-friendly": f"{plan.estimated_customers} style-seekers in {ctx.city} are actively browsing for a slot right now.",
-        "clinical-trust":   f"{plan.estimated_customers} patients in {ctx.city} are actively seeking a trusted {ctx.category} today.",
-        "care-urgent":      f"{plan.estimated_customers} customers in {ctx.city} need a refill or care visit right now.",
+        "sharp-growth":     f"{plan.estimated_customers} people in {ctx.city} are actively searching for {tone.category_noun} right now.",
+        "coach-driven":     f"{plan.estimated_customers} people in {ctx.city} are actively looking to {tone.category_action} right now.",
+        "premium-friendly": f"{plan.estimated_customers} style-seekers in {ctx.city} are actively browsing {tone.category_noun} right now.",
+        "clinical-trust":   f"{plan.estimated_customers} people in {ctx.city} are actively seeking {tone.category_noun} today.",
+        "care-urgent":      f"{plan.estimated_customers} customers in {ctx.city} need to {tone.category_action} right now.",
+        "neutral":          f"{plan.estimated_customers} potential customers in {ctx.city} are actively looking for {tone.category_noun} right now.",
     }
 
     if ctx.trigger_type == "rating_dip":
         line1_variants = [
-            f"{customer_prefix}Recent rating drop is actively pushing customers away.".lstrip(),
+            f"{customer_prefix}Recent rating drop is pushing customers to competitors.".strip(),
             "Customer trust is slipping — each hour costs repeat revenue.",
-            "Protect revenue before more customers lose confidence today.",
+            f"{plan.estimated_customers} customers in {ctx.city} may switch due to rating drop.",
         ]
     elif strategy_type == "social_proof":
         line1_variants = [
-            f"{plan.estimated_customers} people are actively ordering {ctx.category} nearby right now.",
+            f"{plan.estimated_customers} people are actively ordering {tone.category_noun} nearby right now.",
             f"{plan.estimated_customers} others acted on this signal today — window is closing.",
-            f"{customer_prefix}{plan.estimated_customers} local buyers moved on this already.".lstrip(),
+            f"{customer_prefix}{plan.estimated_customers} local buyers already moved on this.".strip(),
         ]
     else:
-        tone_line = TONE_LINE1.get(tone.voice, f"{plan.estimated_customers} nearby buyers are actively searching right now.")
-        if customer_prefix:
-            tone_line = customer_prefix + tone_line[0].lower() + tone_line[1:]
+        base_line = TONE_LINE1.get(tone.voice, f"{plan.estimated_customers} potential customers in {ctx.city} are actively searching right now.")
+        personalized_line = (customer_prefix + base_line[0].lower() + base_line[1:]).strip() if customer_prefix else base_line
         line1_variants = [
-            tone_line,
-            f"{plan.estimated_customers} people searched for {ctx.category} in {ctx.city} today — window is live.",
+            personalized_line,
+            f"{plan.estimated_customers} people searched for {tone.category_noun} in {ctx.city} today — window is live.",
             f"{plan.estimated_customers} nearby users can generate ₹{estimated_value} if you act now.",
         ]
-    line2 = cta
 
-    v1 = Variant(
-        message=enforce_message_rules(enforce_currency(f"{line1_variants[0]}\n{line2}")),
-        cta=cta,
-        send_as=send_as,
-        rationale=[
-            f"Dominant signal selected: {fused.dominant_signal}",
-            f"Trigger interpreted as {trig.semantic_label}",
-            f"Category voice applied: {tone.voice}",
-            f"Strategy selected: {strategy_type}",
-            f"CTA type selected: {cta_type}",
-            f"Message type selected: {message_type}",
-        ],
-    )
+    def _make_variant(line1: str, cta: str, rationale_items: list[str]) -> Variant:
+        msg = line1.strip() + "\n" + cta.strip()
+        return Variant(message=msg, cta=cta.strip(), send_as=send_as, rationale=rationale_items)
 
-    v2 = Variant(
-        message=enforce_message_rules(
-            enforce_currency(
-                f"{line1_variants[1]}\n"
-                f"{line2}"
-            )
-        ),
-        cta=cta,
-        send_as=send_as,
-        rationale=[
-            f"Merchant fit score considered: {fused.merchant_fit}",
-            f"Urgency calibrated to {fused.urgency_score}",
-            f"Priority plan: {plan.priority}",
-            f"Strategy selected: {strategy_type}",
-            f"CTA type selected: {cta_type}",
-            f"Message type selected: {message_type}",
-        ],
-    )
-
-    v3 = Variant(
-        message=enforce_message_rules(
-            enforce_currency(
-                f"{line1_variants[2]}\n"
-                f"{line2}"
-            )
-        ),
-        cta=cta,
-        send_as=send_as,
-        rationale=[
-            f"Intent score from fused signals: {fused.intent_score}",
-            f"Fatigue penalty applied: {fused.fatigue_penalty}",
-            "Deterministic variant template index: 3",
-            f"Strategy selected: {strategy_type}",
-            f"CTA type selected: {cta_type}",
-            f"Message type selected: {message_type}",
-        ],
-    )
+    v1 = _make_variant(line1_variants[0], cta0, [
+        f"Dominant signal: {fused.dominant_signal}",
+        f"Trigger: {trig.semantic_label}",
+        f"Tone: {tone.voice}",
+        f"Strategy: {strategy_type} | CTA: {cta_type}",
+    ])
+    v2 = _make_variant(line1_variants[1], cta1, [
+        f"Merchant fit: {fused.merchant_fit} | Urgency: {fused.urgency_score}",
+        f"Priority: {plan.priority}",
+        f"Strategy: {strategy_type} | CTA: {cta_type}",
+    ])
+    v3 = _make_variant(line1_variants[2], cta2, [
+        f"Intent: {fused.intent_score} | Fatigue penalty: {fused.fatigue_penalty}",
+        f"Strategy: {strategy_type} | CTA: {cta_type}",
+    ])
 
     return [v1, v2, v3]

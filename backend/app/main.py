@@ -164,21 +164,29 @@ def reply(payload: ReplyRequest) -> dict:
     """Record merchant reply to update tone preference and response memory."""
     lowered = payload.reply_text.lower()
     tone = "soft" if any(k in lowered for k in ["later", "not now", "stop"]) else "direct"
-    if any(k in lowered for k in ["yes", "ok", "do it", "go ahead", "approved"]):
+    if any(k in lowered for k in ["yes", "ok", "do it", "go ahead", "approved", "sure"]):
         response = "accepted"
-    elif any(k in lowered for k in ["stop", "no", "don't", "reject"]):
+    elif any(k in lowered for k in ["stop", "no", "don't", "reject", "never"]):
         response = "rejected"
+    elif any(k in lowered for k in ["later", "not now", "maybe", "confused", "what", "?"]):
+        response = "deferred"
     else:
         response = "ignored"
+
     state.set_context(payload.merchant_id, {"preferred_tone": tone})
     state.set_last_response(payload.merchant_id, response)
+
+    next_action_map = {
+        "accepted":  "Interaction recorded. Next decision will reinforce with follow-up offer.",
+        "rejected":  "Suppression extended. Next decision will use softer tone and longer cooldown.",
+        "deferred":  "Cooldown applied. Next decision will use softer messaging after delay.",
+        "ignored":   "Strategy will rotate to social_proof on next tick to improve engagement.",
+    }
+
     return {
         "status": "reply_recorded",
         "merchant_id": payload.merchant_id,
         "interpreted_response": response,
         "tone_updated": tone,
-        "effect": (
-            "Next decision will use softer messaging." if tone == "soft"
-            else "Next decision will use direct messaging."
-        ),
+        "next_action": next_action_map[response],
     }

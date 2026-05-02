@@ -29,17 +29,7 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
     ctx = normalize_context(payload)
     trig = infer_trigger(ctx.trigger_type)
 
-    suppression_key = build_suppression_key(
-        merchant_id=ctx.merchant_id,
-        trigger_type=ctx.trigger_type,
-        timestamp_utc=ctx.timestamp_utc,
-        strategy=strategy,
-    )
-
-    # Check if this trigger is already active in suppression window
-    suppressed = state.is_suppressed(suppression_key, window_minutes=ctx.trigger_window_minutes)
-    
-    # Always compute the fused signals and decision (deterministically)
+    # Compute signals and strategy BEFORE suppression key (strategy needed for key)
     fused = fuse_signals(ctx)
     plan = decide(ctx, fused, trig)
     memory_signals = state.get_memory_signals(ctx.merchant_id)
@@ -47,10 +37,21 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
         memory_signals,
         {"trigger_type": ctx.trigger_type, "cooldown_minutes": str(ctx.trigger_window_minutes)},
     )
+
+    suppression_key = build_suppression_key(
+        merchant_id=ctx.merchant_id,
+        trigger_type=ctx.trigger_type,
+        timestamp_utc=ctx.timestamp_utc,
+        strategy=strategy,
+    )
+    suppressed = state.is_suppressed(suppression_key, window_minutes=ctx.trigger_window_minutes)
+
+    # Pass recent interaction count for personalization fatigue guard
+    recent_interactions = state.get_recent_interactions(ctx.merchant_id, minutes=1440)
     send_as = route_persona(fused, ctx.trigger_type, ctx.customer_id)
 
     # Generate and score variants (deterministically)
-    variants = generate_variants(ctx, fused, trig, plan, send_as, strategy_type=strategy)
+    variants = generate_variants(ctx, fused, trig, plan, send_as, strategy_type=strategy, recent_interaction_count=len(recent_interactions))
     scored = score_variants(variants, ctx, fused)
     best = scored[0]
     cta_type = classify_cta_type(best.variant.cta)
@@ -73,10 +74,10 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
     )
     rationale = " | ".join(r.lstrip("🎯⚡⚠️👤💡📊 ") for r in rationale_list)
 
-    # Enforce strict 2-line message: line1 = context, line2 = CTA (must match exactly)
+    # Final strict 2-line enforcement: line1 clean, line2 = CTA exactly, no trailing whitespace
     lines = [l.strip() for l in best_variant_message.split("\n") if l.strip()]
-    line1 = lines[0] if lines else best_variant_message
-    best_variant_message = line1 + "\n" + best.variant.cta
+    line1 = lines[0] if lines else "Demand signal detected in your area."
+    best_variant_message = line1 + "\n" + best.variant.cta.strip()
     deviation_pct = round((ctx.trigger_ratio - 1.0) * 100, 1)
     rule_trace = RuleTrace(
         trigger_type=ctx.trigger_type,
