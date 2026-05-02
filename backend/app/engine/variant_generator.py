@@ -25,6 +25,20 @@ def enforce_message_rules(msg: str) -> str:
     return "\n".join(lines[:2])
 
 
+# Urgency closers — rotated deterministically to avoid "now?" overuse
+_CLOSERS = ["now?", "right away?", "today?"]
+
+# Category-specific action verbs for CTA precision
+_CTA_VERB: dict[str, str] = {
+    "sharp-growth":     "send offer",
+    "coach-driven":     "launch plan",
+    "premium-friendly": "promote deal",
+    "clinical-trust":   "offer checkup",
+    "care-urgent":      "send refill",
+    "neutral":          "send offer",
+}
+
+
 def _cta_for(
     trigger_type: str,
     promo_pct: int,
@@ -32,28 +46,48 @@ def _cta_for(
     has_strong_offer: bool,
     estimated_customers: int,
     cta_variant: int = 0,
+    strategy_type: str = "info",
+    intent_score: int = 50,
+    tone_voice: str = "neutral",
 ) -> tuple[str, str]:
+    # High confidence (urgency + high intent) → "Want me to" (execution ready)
+    # Otherwise → "Should I" (advisory)
+    high_confidence = (strategy_type == "urgency" and intent_score >= 60)
+    prefix = "Want me to" if high_confidence else "Should I"
+    closer = _CLOSERS[cta_variant % 3]
+    verb = _CTA_VERB.get(tone_voice, "send offer")
+
     if trigger_type == "rating_dip":
-        return "recover_trust", f"Should I run a ₹{promo_pct} trust-recovery campaign to improve reviews?"
+        # Short, no number repeat
+        return "recover_trust", f"{prefix} run a ₹{promo_pct} trust-recovery campaign {closer}"
+
     if fatigue_score > 0.6:
-        return "soft_nudge", f"Should I run a ₹{promo_pct} recovery offer today?"
+        return "soft_nudge", f"{prefix} run a ₹{promo_pct} recovery offer today?"
+
     if trigger_type == "spike":
+        # Use "them" to avoid repeating estimated_customers number
         _variants = [
-            f"Should I push ₹{promo_pct} offer to {estimated_customers} users now?",
-            f"Want me to send ₹{promo_pct} offer to {estimated_customers} users?",
-            f"Should I capture these {estimated_customers} users with a ₹{promo_pct} offer?",
+            f"{prefix} {verb} a ₹{promo_pct} offer to them {closer}",
+            f"{prefix} push a ₹{promo_pct} offer before the window closes?",
+            f"{prefix} capture them with a ₹{promo_pct} offer {closer}",
         ]
         return "push_now", _variants[cta_variant % 3]
+
     if trigger_type == "drop":
         _variants = [
-            f"Should I run a ₹{promo_pct} boost to recover orders now?",
-            f"Want me to activate a ₹{promo_pct} recovery offer today?",
-            f"Should I push a ₹{promo_pct} boost to win back orders?",
+            f"{prefix} {verb} a ₹{promo_pct} boost to recover orders {closer}",
+            f"{prefix} activate a ₹{promo_pct} recovery offer today?",
+            f"{prefix} win back orders with a ₹{promo_pct} boost {closer}",
         ]
         return "recover_drop", _variants[cta_variant % 3]
+
+    if trigger_type == "low_repeat_rate":
+        return "recall", f"{prefix} remind them with a ₹{promo_pct} offer today?"
+
     if has_strong_offer:
-        return "activate_offer", f"Should I activate a ₹{promo_pct} offer for today?"
-    return "soft_nudge", f"Should I run a ₹{promo_pct} recovery test today?"
+        return "activate_offer", f"{prefix} activate a ₹{promo_pct} offer {closer}"
+
+    return "soft_nudge", f"{prefix} run a ₹{promo_pct} recovery test today?"
 
 
 def _line2(priority: str, city: str, trigger_label: str) -> str:
@@ -92,10 +126,19 @@ def generate_variants(
         elif ctx.visits_last_30d > 3:
             customer_prefix = f"You've visited {ctx.visits_last_30d}x this month — "
 
-    # Build 3 CTAs with deterministic variation per variant index
-    cta_type, cta0 = _cta_for(ctx.trigger_type, plan.promo_pct, fused.fatigue_score, has_strong_offer, plan.estimated_customers, 0)
-    _,         cta1 = _cta_for(ctx.trigger_type, plan.promo_pct, fused.fatigue_score, has_strong_offer, plan.estimated_customers, 1)
-    _,         cta2 = _cta_for(ctx.trigger_type, plan.promo_pct, fused.fatigue_score, has_strong_offer, plan.estimated_customers, 2)
+    def _cta(idx: int) -> tuple[str, str]:
+        return _cta_for(
+            ctx.trigger_type, plan.promo_pct, fused.fatigue_score,
+            has_strong_offer, plan.estimated_customers,
+            cta_variant=idx,
+            strategy_type=strategy_type,
+            intent_score=fused.intent_score,
+            tone_voice=tone.voice,
+        )
+
+    cta_type, cta0 = _cta(0)
+    _,         cta1 = _cta(1)
+    _,         cta2 = _cta(2)
 
     # Line1 uses category_noun/category_action — never raw category label
     TONE_LINE1: dict[str, str] = {
