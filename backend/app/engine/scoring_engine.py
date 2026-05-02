@@ -49,7 +49,7 @@ def _category_fit(category: str, message: str, cta: str) -> int:
     """Calculate how well message matches category expectations."""
     joined = f"{message.lower()} {cta.lower()}"
     hits = sum(1 for k in CATEGORY_KEYWORDS[category] if k in joined)
-    base_fit = 45 + hits * 18
+    base_fit = 65 + hits * 12
     
     # Bonus for category-specific pricing/positioning language
     if category == "restaurant" and any(w in joined for w in ["dining", "cuisine", "reservation"]):

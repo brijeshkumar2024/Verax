@@ -25,7 +25,7 @@ export default function Home() {
           <div className="flex items-center lg:justify-end gap-6">
             {[
               { value: "100%", label: "Deterministic" },
-              { value: "<1s", label: "Decision latency" },
+              { value: "<1.5s", label: "Decision latency" },
               { value: "8", label: "Trigger types" },
             ].map(({ value, label }) => (
               <div key={label} className="text-center">

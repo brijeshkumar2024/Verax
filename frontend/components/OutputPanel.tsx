@@ -320,7 +320,7 @@ export default function OutputPanel({
           <div className="flex items-start gap-4 flex-wrap">
             <div>
               <div className="text-lg font-bold text-emerald-300">+{impactLow}% to +{impactHigh}%</div>
-              <div className="text-xs text-gray-500 mt-0.5">Estimated outcome within 7–10 days</div>
+              <div className="text-xs text-gray-500 mt-0.5">weekly order volume · est. 7–10 days</div>
             </div>
             {revenueFormatted && (
               <>
