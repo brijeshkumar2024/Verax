@@ -41,9 +41,19 @@ def decide_strategy(memory: dict[str, str], current_context: dict[str, str]) -> 
     last_response = memory.get("last_response", "ignored")
     last_message_type = memory.get("last_message_type", "info")
     cooldown_minutes = int(current_context.get("cooldown_minutes", "30"))
+    rating = float(current_context.get("rating", "5.0"))
 
     if trigger_type == "rating_dip":
         return "trust_recovery"
+
+    # Multi-signal rule: low rating overrides demand/discount strategy
+    # A merchant with rating < 3.8 needs trust repair even during a spike
+    if rating < 3.8:
+        return "trust_recovery"
+
+    # High-rated merchant facing competition: reinforce loyalty, not discount
+    if trigger_type == "new_competitor" and rating >= 4.3:
+        return "social_proof"
 
     if last_response == "ignored":
         return "social_proof"

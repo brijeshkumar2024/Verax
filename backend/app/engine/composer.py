@@ -35,7 +35,11 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
     memory_signals = state.get_memory_signals(ctx.merchant_id)
     strategy = decide_strategy(
         memory_signals,
-        {"trigger_type": ctx.trigger_type, "cooldown_minutes": str(ctx.trigger_window_minutes)},
+        {
+            "trigger_type": ctx.trigger_type,
+            "cooldown_minutes": str(ctx.trigger_window_minutes),
+            "rating": str(ctx.rating),
+        },
     )
 
     suppression_key = build_suppression_key(
