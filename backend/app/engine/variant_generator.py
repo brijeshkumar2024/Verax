@@ -30,18 +30,24 @@ _CLOSERS = ["now?", "right away?", "today?"]
 
 # Category-specific action verbs for CTA precision
 _CTA_VERB: dict[str, str] = {
-    "sharp-growth":     "send them a ₹{p} offer",
-    "coach-driven":     "launch a ₹{p} plan for them",
-    "premium-friendly": "promote a ₹{p} deal to them",
-    "clinical-trust":   "offer them a ₹{p} checkup",
-    "care-urgent":      "send them a ₹{p} refill offer",
-    "neutral":          "send them a ₹{p} offer",
+    "sharp-growth":     "send them a ₹{p} off deal",
+    "coach-driven":     "launch a ₹{p} off plan for them",
+    "premium-friendly": "promote a ₹{p} off deal to them",
+    "clinical-trust":   "offer them a ₹{p} off checkup",
+    "care-urgent":      "send them a ₹{p} off refill deal",
+    "neutral":          "send them a ₹{p} off deal",
 }
+
+
+def _discount_amount(aov: float, promo_pct: int) -> int:
+    """Convert promo_pct% of AOV to a clean rupee discount rounded to nearest ₹5."""
+    raw = aov * max(promo_pct, 15) / 100  # floor at 15% so discount is never trivially small
+    return max(5, int(round(raw / 5) * 5))  # round to nearest ₹5, minimum ₹5
 
 
 def _cta_for(
     trigger_type: str,
-    promo_pct: int,
+    discount: int,           # rupee discount amount (AOV × promo_pct), NOT raw promo_pct
     fatigue_score: float,
     has_strong_offer: bool,
     estimated_customers: int,
@@ -50,41 +56,39 @@ def _cta_for(
     intent_score: int = 50,
     tone_voice: str = "neutral",
 ) -> tuple[str, str]:
-    # High confidence (urgency + high intent) → "Want me to" (execution ready)
-    # Otherwise → "Want me to" always — consistent assistant tone, no identity confusion
     closer = _CLOSERS[cta_variant % 3]
-    verb_tpl = _CTA_VERB.get(tone_voice, "send them a ₹{p} offer")
-    verb = verb_tpl.replace("{p}", str(promo_pct))  # number only in verb, never repeated in CTA
+    verb_tpl = _CTA_VERB.get(tone_voice, "send them a ₹{p} off deal")
+    verb = verb_tpl.replace("{p}", str(discount))
 
     if trigger_type == "rating_dip":
-        return "recover_trust", f"Want me to run a ₹{promo_pct} trust-recovery campaign {closer}"
+        return "recover_trust", f"Want me to run a ₹{discount} off trust-recovery campaign {closer}"
 
     if fatigue_score > 0.6:
-        return "soft_nudge", f"Want me to run a ₹{promo_pct} recovery offer today?"
+        return "soft_nudge", f"Want me to run a ₹{discount} off recovery offer today?"
 
     if trigger_type == "spike":
         _variants = [
             f"Want me to {verb} {closer}",
-            f"Want me to push a ₹{promo_pct} offer before the window closes?",
-            f"Want me to capture them with a ₹{promo_pct} offer {closer}",
+            f"Want me to push a ₹{discount} off deal before the window closes?",
+            f"Want me to capture them with a ₹{discount} off deal {closer}",
         ]
         return "push_now", _variants[cta_variant % 3]
 
     if trigger_type == "drop":
         _variants = [
             f"Want me to {verb} to recover orders {closer}",
-            f"Want me to activate a ₹{promo_pct} recovery offer today?",
-            f"Want me to win back orders with a ₹{promo_pct} boost {closer}",
+            f"Want me to activate a ₹{discount} off recovery offer today?",
+            f"Want me to win back orders with a ₹{discount} off boost {closer}",
         ]
         return "recover_drop", _variants[cta_variant % 3]
 
     if trigger_type == "low_repeat_rate":
-        return "recall", f"Want me to remind them with a ₹{promo_pct} offer today?"
+        return "recall", f"Want me to remind them with a ₹{discount} off offer today?"
 
     if has_strong_offer:
-        return "activate_offer", f"Want me to activate a ₹{promo_pct} offer {closer}"
+        return "activate_offer", f"Want me to activate a ₹{discount} off deal {closer}"
 
-    return "soft_nudge", f"Want me to run a ₹{promo_pct} recovery test today?"
+    return "soft_nudge", f"Want me to run a ₹{discount} off recovery test today?"
 
 
 def _line2(priority: str, city: str, trigger_label: str) -> str:
@@ -114,6 +118,8 @@ def generate_variants(
     has_strong_offer = plan.promo_pct >= 14
     estimated_value = plan.estimated_revenue
     message_type = _message_type_for(strategy_type)
+    # Compute meaningful rupee discount: AOV × promo_pct, rounded to nearest ₹5
+    discount = _discount_amount(ctx.aov, plan.promo_pct)
 
     # Customer personalization: only when low fatigue (< 3 recent interactions)
     customer_prefix = ""
@@ -125,7 +131,7 @@ def generate_variants(
 
     def _cta(idx: int) -> tuple[str, str]:
         return _cta_for(
-            ctx.trigger_type, plan.promo_pct, fused.fatigue_score,
+            ctx.trigger_type, discount, fused.fatigue_score,
             has_strong_offer, plan.estimated_customers,
             cta_variant=idx,
             strategy_type=strategy_type,
