@@ -146,6 +146,7 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
         <div>
           <h2 className="text-xl font-bold text-white">Decision Output</h2>
           <p className="text-xs text-gray-500 mt-0.5">Deterministic · Explainable · Auditable</p>
+          <p className="text-xs text-gray-600 mt-1">Decision computed using trigger intensity, merchant performance, and category benchmarks.</p>
         </div>
         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold ${confBg} ${confColor}`}>
           <span className="h-1.5 w-1.5 rounded-full bg-current" />
@@ -319,6 +320,9 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
             <span>Persona: <span className="text-gray-400">{output.send_as}</span></span>
             <span className="font-mono">{output.suppression_key}</span>
           </div>
+          <p className="text-xs text-gray-600 italic">
+            Try adjusting trigger strength or baseline to simulate alternative outcomes.
+          </p>
         </motion.div>
 
       </div>
