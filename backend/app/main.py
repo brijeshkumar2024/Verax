@@ -21,19 +21,8 @@ app = FastAPI(title="VERAX API", version="1.0.0")
 # Add CORS middleware to allow frontend requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3006",
-        "http://localhost:3100",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3006",
-        "http://127.0.0.1:3100",
-        "http://localhost:8000",
-        "http://localhost:8080",
-        "https://verax-frontend.vercel.app",
-        "https://*.vercel.app",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
