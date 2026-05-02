@@ -291,15 +291,17 @@ export default function OutputPanel({
           <p className="text-xs font-semibold uppercase tracking-widest text-emerald-400">Recommended Action</p>
           <p className="text-base text-white leading-relaxed font-medium"
             dangerouslySetInnerHTML={{ __html: formatMessageNumbers(actionLine) }} />
-          <div className="pt-2 border-t border-white/5 flex items-start gap-3 flex-wrap">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Next Step</p>
-              <p className="text-sm font-medium text-white">{output.cta}</p>
+          <div className="pt-3 border-t border-white/5 grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <p className="text-xs text-gray-500 uppercase tracking-wider">Next Step</p>
+              <p className="text-sm font-semibold text-white leading-snug">{output.cta}</p>
             </div>
             {strategy && (
-              <div className="text-right flex-shrink-0">
-                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Strategy</p>
-                <p className="text-xs text-emerald-400 font-mono">{strategy.split("→")[0].trim()}</p>
+              <div className="space-y-1">
+                <p className="text-xs text-gray-500 uppercase tracking-wider">Strategy</p>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-300">
+                  ⚡ {strategy.split("|")[0].trim()}
+                </span>
               </div>
             )}
           </div>
