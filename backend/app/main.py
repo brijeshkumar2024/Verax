@@ -30,6 +30,8 @@ app.add_middleware(
         "http://127.0.0.1:3100",
         "http://localhost:8000",
         "http://localhost:8080",
+        "https://verax-frontend.vercel.app",
+        "https://*.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
