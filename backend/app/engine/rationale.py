@@ -6,6 +6,8 @@ from app.engine.types import FusedSignals, NormalizedContext, TriggerMeaning
 
 def _fmt_revenue(amount: int) -> str:
     """Format revenue to clean readable amount: round to nearest 100, use K for thousands."""
+    if amount < 100:
+        return f"₹{amount}"  # show exact for small amounts
     rounded = int(round(amount / 100) * 100)
     if rounded >= 1000:
         return f"₹{rounded / 1000:.1f}K"
