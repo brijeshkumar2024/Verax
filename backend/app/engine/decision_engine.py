@@ -31,7 +31,9 @@ def decide(ctx: NormalizedContext, fused: FusedSignals, trig: TriggerMeaning) ->
     promo_pct = min(25, max(8, base_promo))
 
     estimated_customers = max(int(ctx.weekly_orders * 0.05), int(ctx.weekly_orders * 0.008 + fused.intent_score * 1.3))
-    estimated_revenue = int(estimated_customers * ctx.aov * (1 - (promo_pct / 100)))
+    # Revenue = reachable customers × AOV × conversion_rate × (1 - promo_discount)
+    # Fully derived from merchant inputs — no hardcoding
+    estimated_revenue = int(estimated_customers * ctx.aov * ctx.conversion_rate * (1 - (promo_pct / 100)))
 
     return DecisionPlan(
         priority=priority,

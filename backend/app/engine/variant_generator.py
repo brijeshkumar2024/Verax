@@ -143,7 +143,7 @@ def generate_variants(
         "sharp-growth": [
             f"{plan.estimated_customers} people in {ctx.city} are actively searching for {tone.category_noun} right now.",
             f"Right now, {plan.estimated_customers} buyers in {ctx.city} are looking for {tone.category_noun}.",
-            f"{tone.category_noun.capitalize()} demand is live — {plan.estimated_customers} people in {ctx.city} are searching.",
+            f"Demand for {tone.category_noun} is live — {plan.estimated_customers} people in {ctx.city} are searching.",
             f"There are {plan.estimated_customers} active buyers in {ctx.city} looking for {tone.category_noun} today.",
         ],
         "coach-driven": [

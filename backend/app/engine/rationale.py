@@ -28,6 +28,6 @@ def build_rationale(
     return [
         f"Trigger: {ctx.trigger_type} | Signal: {trig.semantic_label}",
         f"Impact: {plan.estimated_customers} buyers at risk in {ctx.city}" if ctx.trigger_type == "rating_dip" else f"Opportunity: {plan.estimated_customers} buyers in {ctx.city}",
-        f"Offer: ₹{plan.estimated_revenue} potential | {plan.promo_pct}% promo | rating {ctx.rating:.1f}",
+        f"Offer: ₹{plan.estimated_revenue} ({plan.estimated_customers} buyers × AOV × conv × {100 - plan.promo_pct}%) | rating {ctx.rating:.1f}",
         f"Strategy: {strategy} → {cta_type} | {selection_note} | {confidence[:20]}",
     ]
