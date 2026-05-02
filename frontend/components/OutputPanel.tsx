@@ -160,9 +160,8 @@ function impactRange(strength: number, category: Category): { low: number; high:
 
 // ── Decision basis footer ────────────────────────────────────────────────────
 
-function decisionBasisLine(strength: number, observed: number, baseline: number, category: Category): string {
-  const dev = formatDeviation(observed, baseline);
-  return `Decision computed using trigger intensity (${strength.toFixed(1)}×), merchant performance ${dev}, and ${category} category benchmarks.`;
+function decisionBasisLine(strength: number, category: Category): string {
+  return `Decision computed using trigger intensity (${strength.toFixed(1)}×) and ${category} category benchmarks.`;
 }
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -225,7 +224,7 @@ export default function OutputPanel({
   const triggerContext = triggerContextSentence(trigger);
   const causalWhy = causalWhySentence(trigger, observedValue, baselineValue, triggerStrength);
   const { low: impactLow, high: impactHigh } = impactRange(triggerStrength, category);
-  const basisLine = decisionBasisLine(triggerStrength, observedValue, baselineValue, category);
+  const basisLine = decisionBasisLine(triggerStrength, category);
 
   // Revenue from message — resilient
   const revenueMatch = output.message.match(/₹([\d,]+)/) ?? output.cta.match(/₹([\d,]+)/);

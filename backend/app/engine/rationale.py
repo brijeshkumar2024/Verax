@@ -4,6 +4,14 @@ from app.engine.decision_engine import DecisionPlan
 from app.engine.types import FusedSignals, NormalizedContext, TriggerMeaning
 
 
+def _fmt_revenue(amount: int) -> str:
+    """Format revenue to clean readable amount: round to nearest 100, use K for thousands."""
+    rounded = int(round(amount / 100) * 100)
+    if rounded >= 1000:
+        return f"₹{rounded / 1000:.1f}K"
+    return f"₹{rounded}"
+
+
 def build_rationale(
     ctx: NormalizedContext,
     trig: TriggerMeaning,
@@ -25,9 +33,18 @@ def build_rationale(
     rejected = rejected_scores or []
     selection_note = f"Winner {winner_score}/100" + (f" vs {', '.join(str(s) for s in rejected)}" if rejected else "")
 
+    _STRATEGY_LABELS: dict[str, str] = {
+        "urgency":        "Demand Capture",
+        "social_proof":   "Social Proof",
+        "discount":       "Discount Push",
+        "trust_recovery": "Trust Recovery",
+        "info":           "Awareness",
+    }
+    strategy_label = _STRATEGY_LABELS.get(strategy, strategy.replace("_", " ").title())
+
     return [
         f"Trigger: {ctx.trigger_type} | Signal: {trig.semantic_label}",
         f"Impact: {plan.estimated_customers} buyers at risk in {ctx.city}" if ctx.trigger_type == "rating_dip" else f"Opportunity: {plan.estimated_customers} buyers in {ctx.city}",
-        f"Offer: ₹{plan.estimated_revenue} ({plan.estimated_customers} buyers × AOV × conv × {100 - plan.promo_pct}%) | rating {ctx.rating:.1f}",
-        f"Strategy: {strategy} → {cta_type} | {selection_note} | {confidence}",
+        f"Offer: {_fmt_revenue(plan.estimated_revenue)} ({plan.estimated_customers} buyers × AOV × conv × {100 - plan.promo_pct}%) | rating {ctx.rating:.1f}",
+        f"Strategy: {strategy_label} | {selection_note} | {confidence}",
     ]

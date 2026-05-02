@@ -37,12 +37,12 @@ def _demand_phrase(merchant_id: str) -> str:
 
 # Category-specific action verbs for CTA precision
 _CTA_VERB: dict[str, str] = {
-    "sharp-growth":     "send them a ₹{p} off deal",
-    "coach-driven":     "launch a ₹{p} off plan for them",
-    "premium-friendly": "promote a ₹{p} off deal to them",
+    "sharp-growth":     "send them a ₹{p} discount",
+    "coach-driven":     "launch a ₹{p} plan for them",
+    "premium-friendly": "promote a ₹{p} offer to them",
     "clinical-trust":   "offer them a ₹{p} off checkup",
-    "care-urgent":      "send them a ₹{p} off refill deal",
-    "neutral":          "send them a ₹{p} off deal",
+    "care-urgent":      "send them a ₹{p} refill offer",
+    "neutral":          "send them a ₹{p} discount",
 }
 
 
