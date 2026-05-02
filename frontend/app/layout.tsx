@@ -1,15 +1,18 @@
+import type { Metadata } from "next";
 import { ReactNode } from "react";
 import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "VERAX",
+  description: "Deterministic merchant growth decision engine",
+  icons: {
+    icon: "/icon.png",
+  },
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>VERAX Control Room</title>
-        <meta name="description" content="Deterministic merchant growth decision simulator" />
-      </head>
       <body suppressHydrationWarning>
         <div className="grid-bg" />
         <div className="relative z-10">{children}</div>
