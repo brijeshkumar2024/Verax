@@ -4,6 +4,7 @@
 
 **Live API:** https://verax-backend-v5ea.onrender.com
 **Live UI:** https://verax-frontend.vercel.app
+**Built by:** [Brijesh Kumar](https://github.com/brijeshkumar2024)
 
 ---
 
@@ -325,3 +326,7 @@ frontend/
 ---
 
 > **VERAX is not an AI chatbot — it is a deterministic decision system built for real-world execution.**
+
+---
+
+Built with ❤️ by **Brijesh Kumar** — [GitHub](https://github.com/brijeshkumar2024)
