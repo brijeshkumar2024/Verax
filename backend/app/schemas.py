@@ -22,8 +22,8 @@ class MerchantInput(BaseModel):
     name: str
     category: CategoryType
     city: str
-    avg_order_value: float = Field(ge=0, le=100_000)
-    weekly_orders: int = Field(ge=0, le=500_000)
+    avg_order_value: float = Field(gt=0, le=100_000)
+    weekly_orders: int = Field(gt=0, le=500_000)
     conversion_rate: float = Field(ge=0.0, le=1.0)
     repeat_customer_rate: float = Field(ge=0.0, le=1.0)
     rating: float = Field(ge=1.0, le=5.0)
@@ -32,7 +32,7 @@ class MerchantInput(BaseModel):
 
 class TriggerInput(BaseModel):
     type: str  # Accept string to allow alias normalization
-    observed_value: float
+    observed_value: float = Field(ge=0)
     baseline_value: float = Field(gt=0)
     window_minutes: int = Field(default=180, ge=15, le=1440)
     timestamp_utc: str
@@ -62,6 +62,7 @@ class ComposeResponse(BaseModel):
     rationale: List[str]
     decision_score: int = Field(ge=0, le=100)
     score_components: Dict[str, int] = Field(default_factory=dict)
+    rule_trace: str = ""
 
 
 class ContextRequest(BaseModel):

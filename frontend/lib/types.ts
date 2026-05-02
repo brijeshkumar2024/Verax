@@ -55,4 +55,5 @@ export type ComposeResponse = {
     merchant_fit: number;
     engagement: number;
   };
+  rule_trace?: string;
 };

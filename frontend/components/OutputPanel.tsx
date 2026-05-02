@@ -311,6 +311,16 @@ export default function OutputPanel({
           <p className="text-sm text-gray-300 leading-relaxed">{causalWhy}</p>
         </motion.div>
 
+        {/* 3b. RULE CHAIN */}
+        {output.rule_trace && (
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.38 }}
+            className="glass rounded-xl p-4 border border-violet-500/20 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">Rule Chain Applied</p>
+            <p className="text-xs font-mono text-violet-300 leading-relaxed break-all">{output.rule_trace}</p>
+            <p className="text-xs text-gray-600">Every token in this chain is a deterministic rule — no model, no sampling, no randomness.</p>
+          </motion.div>
+        )}
+
         {/* 4. EXPECTED IMPACT */}
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.40 }}
           className="glass rounded-xl p-4 border border-emerald-500/20 space-y-3">

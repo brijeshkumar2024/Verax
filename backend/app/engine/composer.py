@@ -67,6 +67,14 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
 
     rationale = build_rationale(ctx, trig, fused, plan, strategy, cta_type, best.total_score)
 
+    # Build rule trace for transparency
+    deviation_pct = round((ctx.trigger_ratio - 1.0) * 100, 1)
+    deviation_label = f"+{deviation_pct}%" if deviation_pct >= 0 else f"{deviation_pct}%"
+    rule_trace = (
+        f"{ctx.trigger_type} → {fused.dominant_signal}_signal → {plan.priority} → {strategy} "
+        f"[deviation {deviation_label}, intent {fused.intent_score}, urgency {fused.urgency_score}]"
+    )
+
     # Record interaction for memory/analytics
     state.add_interaction(
         merchant_id=ctx.merchant_id,
@@ -89,4 +97,5 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
         rationale=rationale,
         decision_score=best.total_score,
         score_components=best.score_components,
+        rule_trace=rule_trace,
     )
