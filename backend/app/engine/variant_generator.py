@@ -85,6 +85,12 @@ def generate_variants(
             "Customer trust is slipping after a recent rating drop.",
             "Protect revenue before more customers lose confidence today.",
         ]
+    elif strategy_type == "social_proof":
+        line1_variants = [
+            f"{plan.estimated_customers} people ordered from {ctx.category} nearby today.",
+            f"{plan.estimated_customers} others ordered today — join them before the window closes.",
+            f"{plan.estimated_customers} local buyers acted on this signal today.",
+        ]
     else:
         line1_variants = [
             f"{plan.estimated_customers} nearby buyers are ready today.",

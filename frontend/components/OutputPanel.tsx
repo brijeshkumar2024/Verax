@@ -341,7 +341,7 @@ export default function OutputPanel({
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.46 }}
           className="glass rounded-xl p-4 border border-emerald-500/20 space-y-2">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">How to Execute</p>
-          <ol className="space-y-1.5 text-sm text-gray-300 list-none">
+          <div className="space-y-1.5 text-sm text-gray-300">
             {[
               "Review the recommended message and confirm it fits your current context.",
               "Send via your preferred channel — push notification, WhatsApp, or in-app message.",
@@ -352,7 +352,7 @@ export default function OutputPanel({
                 <span>{step}</span>
               </li>
             ))}
-          </ol>
+          </div>
         </motion.div>
 
         {/* Decision Reasoning */}
