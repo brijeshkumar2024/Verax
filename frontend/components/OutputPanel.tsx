@@ -142,7 +142,7 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
             transition={{ delay: 0.35 }}
             className="glass rounded-xl p-4 border border-cyan-500/20 space-y-1"
           >
-            <p className="text-xs font-semibold uppercase tracking-widest text-cyan-400">Expected Impact</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-cyan-400">Expected Impact <span className="normal-case tracking-normal font-normal text-gray-500">(Estimated)</span></p>
             <p
               className="text-sm text-gray-200 leading-relaxed"
               dangerouslySetInnerHTML={{ __html: highlightNumbers(impactLine) }}
@@ -194,10 +194,15 @@ export default function OutputPanel({ output, loading = false }: OutputPanelProp
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="flex items-center justify-between text-xs text-gray-600 px-1"
+          className="space-y-2 px-1"
         >
-          <span>Persona: <span className="text-gray-400">{output.send_as}</span></span>
-          <span className="font-mono">{output.suppression_key}</span>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Decision computed using trigger intensity, merchant performance, and category benchmarks.
+          </p>
+          <div className="flex items-center justify-between text-xs text-gray-600">
+            <span>Persona: <span className="text-gray-400">{output.send_as}</span></span>
+            <span className="font-mono">{output.suppression_key}</span>
+          </div>
         </motion.div>
       </div>
     </motion.section>
