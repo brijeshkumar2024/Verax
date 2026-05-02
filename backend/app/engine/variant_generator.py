@@ -122,6 +122,241 @@ def _cta_for(
     return "soft_nudge", f"Want me to run a ₹{discount} off recovery test today?"
 
 
+# ---------------------------------------------------------------------------
+# Category × trigger template library
+# 3 natural line1 strings per (category, trigger_type)
+# Picked by hash(merchant_id + trigger_type) % 3 — fully deterministic
+# Rules: opens with number/fact, no greeting, category-specific language
+# ---------------------------------------------------------------------------
+_TEMPLATES: dict[tuple[str, str], list[str]] = {
+    # ── RESTAURANT ──────────────────────────────────────────────────────────
+    ("restaurant", "spike"): [
+        "{n} people in {city} are actively searching for dinner deals right now.",
+        "Dinner demand is surging — {n} hungry buyers in {city} are ready to order.",
+        "{n} food orders are waiting in {city} — this window closes fast.",
+    ],
+    ("restaurant", "drop"): [
+        "Order volume in {city} has dropped — {n} potential diners are going elsewhere.",
+        "{n} dinner orders were lost today — a targeted deal can win them back.",
+        "Food demand in {city} is slipping — {n} buyers need a reason to order now.",
+    ],
+    ("restaurant", "rating_dip"): [
+        "Your rating drop is costing you dinner orders — {n} customers may switch.",
+        "{n} diners in {city} are reconsidering after your recent rating dip.",
+        "A lower rating is pushing {n} food orders to competitors in {city}.",
+    ],
+    ("restaurant", "new_competitor"): [
+        "A new restaurant opened in {city} — {n} of your regulars are at risk.",
+        "{n} loyal diners in {city} are being targeted by a new competitor.",
+        "Competition just entered {city} — {n} dinner orders could shift away.",
+    ],
+    ("restaurant", "low_repeat_rate"): [
+        "{n} past diners in {city} haven't reordered in over 2 weeks.",
+        "Repeat order rate is falling — {n} customers in {city} need a nudge.",
+        "{n} one-time diners in {city} are slipping away without a follow-up.",
+    ],
+    ("restaurant", "festival"): [
+        "Festival demand is live — {n} people in {city} are searching for food deals.",
+        "{n} diners in {city} are looking for a festive meal offer right now.",
+        "Peak dining window is open — {n} buyers in {city} are ready to order.",
+    ],
+    ("restaurant", "weekend_opportunity"): [
+        "Weekend dinner demand is up — {n} buyers in {city} are searching right now.",
+        "{n} people in {city} are planning their weekend meal — window is live.",
+        "Weekend food orders are peaking — {n} hungry buyers in {city} are ready.",
+    ],
+    ("restaurant", "refill_reminder"): [
+        "{n} regular diners in {city} haven't ordered in 2 weeks — reach them now.",
+        "Repeat order window is open — {n} past customers in {city} need a nudge.",
+        "{n} loyal diners in {city} are due for their next order today.",
+    ],
+    # ── GYM ─────────────────────────────────────────────────────────────────
+    ("gym", "spike"): [
+        "{n} people in {city} are actively looking to book a fitness session today.",
+        "Fitness demand is surging — {n} motivated members in {city} want to train.",
+        "{n} people in {city} are searching for a gym session right now.",
+    ],
+    ("gym", "drop"): [
+        "Session bookings in {city} have dropped — {n} members are losing their streak.",
+        "{n} gym members in {city} haven't booked this week — re-engage them now.",
+        "Fitness momentum is slipping — {n} members in {city} need a push today.",
+    ],
+    ("gym", "rating_dip"): [
+        "Your gym rating dropped — {n} members in {city} may cancel their plan.",
+        "{n} fitness members in {city} are reconsidering after your recent reviews.",
+        "A rating dip is putting {n} active memberships in {city} at risk.",
+    ],
+    ("gym", "new_competitor"): [
+        "A new gym opened in {city} — {n} of your members are being targeted.",
+        "{n} fitness members in {city} are at risk of switching to a new competitor.",
+        "Competition just entered {city} — {n} gym sessions could shift away.",
+    ],
+    ("gym", "low_repeat_rate"): [
+        "{n} members in {city} haven't booked a session in over 2 weeks.",
+        "Repeat session rate is falling — {n} members in {city} are going inactive.",
+        "{n} gym members in {city} are losing their fitness streak — act now.",
+    ],
+    ("gym", "festival"): [
+        "Festival fitness demand is live — {n} people in {city} want to train today.",
+        "{n} motivated members in {city} are looking for a festive fitness deal.",
+        "Peak fitness window is open — {n} people in {city} are ready to book.",
+    ],
+    ("gym", "weekend_opportunity"): [
+        "Weekend training demand is up — {n} members in {city} want to book today.",
+        "{n} people in {city} are planning a weekend workout — window is live.",
+        "Weekend fitness sessions are filling up — {n} buyers in {city} are ready.",
+    ],
+    ("gym", "refill_reminder"): [
+        "{n} members in {city} haven't renewed their plan this month — act now.",
+        "Plan renewal window is open — {n} gym members in {city} need a reminder.",
+        "{n} fitness members in {city} are due for a plan renewal today.",
+    ],
+    # ── SALON ────────────────────────────────────────────────────────────────
+    ("salon", "spike"): [
+        "{n} style-seekers in {city} are actively browsing beauty slots right now.",
+        "Beauty demand is surging — {n} clients in {city} are looking for a slot.",
+        "{n} people in {city} are searching for a salon appointment today.",
+    ],
+    ("salon", "drop"): [
+        "Salon bookings in {city} have dropped — {n} potential clients are going elsewhere.",
+        "{n} beauty appointments were missed this week — a deal can bring them back.",
+        "Slot demand in {city} is slipping — {n} style-seekers need a reason to book.",
+    ],
+    ("salon", "rating_dip"): [
+        "Your salon rating dropped — {n} clients in {city} may book elsewhere.",
+        "{n} beauty clients in {city} are reconsidering after your recent reviews.",
+        "A rating dip is putting {n} loyal salon clients in {city} at risk.",
+    ],
+    ("salon", "new_competitor"): [
+        "A new salon opened in {city} — {n} of your regulars are being targeted.",
+        "{n} beauty clients in {city} are at risk of switching to a new competitor.",
+        "Competition just entered {city} — {n} salon bookings could shift away.",
+    ],
+    ("salon", "low_repeat_rate"): [
+        "{n} past clients in {city} haven't rebooked in over 3 weeks.",
+        "Repeat booking rate is falling — {n} beauty clients in {city} need a nudge.",
+        "{n} salon clients in {city} are slipping away without a follow-up offer.",
+    ],
+    ("salon", "festival"): [
+        "Festival beauty demand is live — {n} style-seekers in {city} want a slot.",
+        "{n} clients in {city} are looking for a festive beauty deal right now.",
+        "Peak styling window is open — {n} people in {city} are ready to book.",
+    ],
+    ("salon", "weekend_opportunity"): [
+        "Weekend beauty demand is up — {n} style-seekers in {city} want a slot today.",
+        "{n} people in {city} are planning a weekend beauty appointment — act now.",
+        "Weekend salon slots are filling up — {n} clients in {city} are ready.",
+    ],
+    ("salon", "refill_reminder"): [
+        "{n} regular clients in {city} haven't rebooked their beauty slot this month.",
+        "Rebooking window is open — {n} salon clients in {city} need a reminder.",
+        "{n} loyal clients in {city} are due for their next beauty appointment.",
+    ],
+    # ── DENTIST ──────────────────────────────────────────────────────────────
+    ("dentist", "spike"): [
+        "{n} patients in {city} are actively seeking a dental checkup today.",
+        "Appointment demand is up — {n} people in {city} need a dental visit.",
+        "{n} people in {city} are searching for a trusted dentist right now.",
+    ],
+    ("dentist", "drop"): [
+        "Appointment bookings in {city} have dropped — {n} patients need a reminder.",
+        "{n} dental patients in {city} are overdue — a timely offer can bring them in.",
+        "Checkup demand in {city} is slipping — {n} patients haven't rebooked.",
+    ],
+    ("dentist", "rating_dip"): [
+        "Your clinic rating dropped — {n} patients in {city} may seek care elsewhere.",
+        "{n} dental patients in {city} are reconsidering after your recent reviews.",
+        "A trust dip is putting {n} patient relationships in {city} at risk.",
+    ],
+    ("dentist", "new_competitor"): [
+        "A new dental clinic opened in {city} — {n} of your patients are at risk.",
+        "{n} patients in {city} are being targeted by a new dental competitor.",
+        "Competition just entered {city} — {n} checkup appointments could shift away.",
+    ],
+    ("dentist", "low_repeat_rate"): [
+        "{n} patients in {city} haven't booked a follow-up checkup in 6 months.",
+        "Recall rate is falling — {n} dental patients in {city} are overdue.",
+        "{n} patients in {city} are missing their routine checkup — reach them now.",
+    ],
+    ("dentist", "refill_reminder"): [
+        "{n} patients in {city} are due for their next dental checkup this month.",
+        "Checkup reminders are overdue — {n} patients in {city} haven't rebooked.",
+        "{n} dental patients in {city} need a recall reminder today.",
+    ],
+    ("dentist", "weekend_opportunity"): [
+        "Weekend appointment slots are open — {n} patients in {city} need a checkup.",
+        "{n} people in {city} are looking for a weekend dental appointment today.",
+        "Weekend dental demand is live — {n} patients in {city} are ready to book.",
+    ],
+    # ── PHARMACY ─────────────────────────────────────────────────────────────
+    ("pharmacy", "spike"): [
+        "{n} customers in {city} need medicine refills or care visits right now.",
+        "Health demand is up — {n} people in {city} are searching for a pharmacy.",
+        "{n} customers in {city} are actively looking for urgent medicine today.",
+    ],
+    ("pharmacy", "drop"): [
+        "Refill orders in {city} have dropped — {n} customers may be going elsewhere.",
+        "{n} pharmacy customers in {city} haven't reordered — a reminder can help.",
+        "Medicine demand in {city} is slipping — {n} customers need a care nudge.",
+    ],
+    ("pharmacy", "rating_dip"): [
+        "Your pharmacy rating dropped — {n} customers in {city} may switch providers.",
+        "{n} care customers in {city} are reconsidering after your recent reviews.",
+        "A trust dip is putting {n} loyal pharmacy customers in {city} at risk.",
+    ],
+    ("pharmacy", "new_competitor"): [
+        "A new pharmacy opened in {city} — {n} of your regulars are at risk.",
+        "{n} medicine customers in {city} are being targeted by a new competitor.",
+        "Competition just entered {city} — {n} refill orders could shift away.",
+    ],
+    ("pharmacy", "low_repeat_rate"): [
+        "{n} customers in {city} haven't refilled their medicine in over 3 weeks.",
+        "Repeat refill rate is falling — {n} pharmacy customers in {city} need a nudge.",
+        "{n} care customers in {city} are overdue for a refill — reach them now.",
+    ],
+    ("pharmacy", "refill_reminder"): [
+        "{n} customers in {city} are due for a medicine refill this week.",
+        "Refill reminders are overdue — {n} customers in {city} need their medicine.",
+        "{n} pharmacy customers in {city} haven't refilled in 30 days — act now.",
+    ],
+    ("pharmacy", "festival"): [
+        "Festival health demand is live — {n} customers in {city} need care supplies.",
+        "{n} people in {city} are stocking up on medicine for the festive season.",
+        "Peak health demand is open — {n} customers in {city} need a refill deal.",
+    ],
+    ("pharmacy", "weekend_opportunity"): [
+        "Weekend health demand is up — {n} customers in {city} need refills today.",
+        "{n} people in {city} are planning weekend medicine pickups — act now.",
+        "Weekend pharmacy demand is live — {n} customers in {city} are ready.",
+    ],
+}
+
+
+def _get_line1(
+    category: str,
+    trigger_type: str,
+    merchant_id: str,
+    n: int,
+    city: str,
+    customer_prefix: str = "",
+) -> str:
+    """Pick a category+trigger-specific line1 deterministically."""
+    _alias_map = {"festival": "festival", "refill_reminder": "refill_reminder"}
+    tkey = _alias_map.get(trigger_type, trigger_type)
+    templates = _TEMPLATES.get((category, tkey)) or _TEMPLATES.get((category, "spike"))
+    if not templates:
+        templates = [
+            f"{n} potential customers in {city} are actively searching right now.",
+            f"Right now, {n} buyers in {city} are looking for a deal.",
+            f"{n} active buyers in {city} are ready to convert today.",
+        ]
+    idx = hash(merchant_id + tkey) % 3
+    line = templates[idx].format(n=n, city=city)
+    if customer_prefix:
+        line = customer_prefix + line[0].lower() + line[1:]
+    return line.strip()
+
+
 def _line2(priority: str, city: str, trigger_label: str) -> str:
     if priority == "capture-demand-now":
         return f"Demand signal: {trigger_label} in {city}; act now to secure top intent."
@@ -176,69 +411,12 @@ def generate_variants(
     _,         cta1 = _cta(1)
     _,         cta2 = _cta(2)
 
-    # 4 deterministic intro structures rotated by (estimated_customers % 4)
-    # Prevents lexical monotony across repeated ticks with same tone
-    _INTROS: dict[str, list[str]] = {
-        "sharp-growth": [
-            f"{plan.estimated_customers} people in {ctx.city} are actively searching for {tone.category_noun} right now.",
-            f"Right now, {plan.estimated_customers} buyers in {ctx.city} are looking for {tone.category_noun}.",
-            f"Demand for {tone.category_noun} is live — {plan.estimated_customers} people in {ctx.city} are searching.",
-            f"There are {plan.estimated_customers} active buyers in {ctx.city} looking for {tone.category_noun} today.",
-        ],
-        "coach-driven": [
-            f"{plan.estimated_customers} people in {ctx.city} are actively looking to {tone.category_action} right now.",
-            f"Right now, {plan.estimated_customers} people in {ctx.city} want to {tone.category_action}.",
-            f"{plan.estimated_customers} motivated members in {ctx.city} are ready to {tone.category_action}.",
-            f"There are {plan.estimated_customers} people in {ctx.city} looking to {tone.category_action} today.",
-        ],
-        "premium-friendly": [
-            f"{plan.estimated_customers} style-seekers in {ctx.city} are actively browsing {tone.category_noun} right now.",
-            f"Right now, {plan.estimated_customers} people in {ctx.city} are browsing {tone.category_noun}.",
-            f"{plan.estimated_customers} potential clients in {ctx.city} are exploring {tone.category_noun} today.",
-            f"There are {plan.estimated_customers} style-seekers in {ctx.city} looking for {tone.category_noun}.",
-        ],
-        "clinical-trust": [
-            f"{plan.estimated_customers} people in {ctx.city} are actively seeking {tone.category_noun} today.",
-            f"Right now, {plan.estimated_customers} patients in {ctx.city} need {tone.category_noun}.",
-            f"{plan.estimated_customers} people in {ctx.city} are looking to book {tone.category_noun}.",
-            f"There are {plan.estimated_customers} patients in {ctx.city} searching for {tone.category_noun} today.",
-        ],
-        "care-urgent": [
-            f"{plan.estimated_customers} customers in {ctx.city} need to {tone.category_action} right now.",
-            f"Right now, {plan.estimated_customers} customers in {ctx.city} need {tone.category_noun}.",
-            f"{plan.estimated_customers} people in {ctx.city} are due for {tone.category_noun}.",
-            f"There are {plan.estimated_customers} customers in {ctx.city} who need to {tone.category_action} today.",
-        ],
-        "neutral": [
-            f"{plan.estimated_customers} potential customers in {ctx.city} are actively looking for {tone.category_noun} right now.",
-            f"Right now, {plan.estimated_customers} people in {ctx.city} are searching for {tone.category_noun}.",
-            f"{plan.estimated_customers} buyers in {ctx.city} are looking for {tone.category_noun} today.",
-            f"There are {plan.estimated_customers} active buyers in {ctx.city} interested in {tone.category_noun}.",
-        ],
-    }
-    _intro_idx = plan.estimated_customers % 4
-    TONE_LINE1: dict[str, str] = {k: v[_intro_idx] for k, v in _INTROS.items()}
-
-    if ctx.trigger_type == "rating_dip":
-        line1_variants = [
-            f"{customer_prefix}Recent rating drop is pushing customers to competitors.".strip(),
-            "Customer trust is slipping — each hour costs repeat revenue.",
-            f"{plan.estimated_customers} customers in {ctx.city} may switch due to rating drop.",
-        ]
-    elif strategy_type == "social_proof":
-        line1_variants = [
-            f"{plan.estimated_customers} {demand_phrase} are actively ordering {tone.category_noun} nearby right now.",
-            f"{plan.estimated_customers} {demand_phrase} acted on this signal today — window is closing.",
-            f"{customer_prefix}{plan.estimated_customers} {demand_phrase} already moved on this.".strip(),
-        ]
-    else:
-        base_line = TONE_LINE1.get(tone.voice, f"{plan.estimated_customers} {demand_phrase} in {ctx.city} are actively searching right now.")
-        personalized_line = (customer_prefix + base_line[0].lower() + base_line[1:]).strip() if customer_prefix else base_line
-        line1_variants = [
-            personalized_line,
-            f"{plan.estimated_customers} {demand_phrase} searched for {tone.category_noun} in {ctx.city} today — window is live.",
-            f"{plan.estimated_customers} {demand_phrase} can generate ₹{estimated_value} if you act now.",
-        ]
+    # 3 deterministic line1 variants — category+trigger specific, picked by hash
+    line1_variants = [
+        _get_line1(ctx.category, ctx.trigger_type, ctx.merchant_id, plan.estimated_customers, ctx.city, customer_prefix),
+        _get_line1(ctx.category, ctx.trigger_type, ctx.merchant_id + "_v2", plan.estimated_customers, ctx.city, ""),
+        _get_line1(ctx.category, ctx.trigger_type, ctx.merchant_id + "_v3", plan.estimated_customers, ctx.city, ""),
+    ]
 
     def _make_variant(line1: str, cta: str, rationale_items: list[str]) -> Variant:
         msg = line1.strip() + "\n" + cta.strip()
