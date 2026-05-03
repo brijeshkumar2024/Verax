@@ -88,9 +88,14 @@ function extractTriggerContext(rationale: string): { trigger: string; opportunit
   };
 }
 
-function triggerContextSentence(triggerRaw: string): string {
+function triggerContextSentence(triggerRaw: string, strength: number): string {
   const t = triggerRaw.toLowerCase();
-  if (t.includes("spike") || t.includes("demand surge")) return "A demand surge has been detected above your normal baseline. This is a high-intent window where buyers are actively searching — acting now captures revenue that would otherwise be missed.";
+  if (t.includes("spike") || t.includes("demand surge")) {
+    if (strength >= 1) {
+      return "A demand surge has been detected above your normal baseline. This is a high-intent window where buyers are actively searching — acting now captures revenue that would otherwise be missed.";
+    }
+    return "Demand is running below your normal baseline. This is a cooling window where intent is softer, so a cautious recovery or re-engagement move is more appropriate.";
+  }
   if (t.includes("drop")) return "Order volume has fallen below your normal baseline. A targeted recovery push now can reverse the trend before it compounds into a longer slump.";
   if (t.includes("cart")) return "A high proportion of customers are abandoning carts without completing purchase. A timely nudge with a small incentive can recover a significant share of this lost revenue.";
   if (t.includes("repeat") || t.includes("retention")) return "Repeat customer rate is below healthy levels. Retaining an existing customer costs far less than acquiring a new one — a loyalty push now protects long-term revenue.";
@@ -124,8 +129,12 @@ function causalWhySentence(
   const dev = formatDeviation(observed, baseline);
   const t = triggerRaw.toLowerCase();
 
-  if (t.includes("spike") || t.includes("demand surge"))
-    return `Your observed signal (${observed}) is ${dev}, indicating a ${strength.toFixed(1)}× demand surge. High-intent windows like this convert at 2–3× normal rates — a targeted push now captures buyers already in decision mode.`;
+  if (t.includes("spike") || t.includes("demand surge")) {
+    if (strength >= 1) {
+      return `Your observed signal (${observed}) is ${dev}, indicating a ${strength.toFixed(1)}× demand surge. High-intent windows like this convert at 2–3× normal rates — a targeted push now captures buyers already in decision mode.`;
+    }
+    return `Your observed signal (${observed}) is ${dev}, indicating a ${strength.toFixed(1)}× slowdown versus baseline. The priority here is to recover intent or re-engage buyers rather than frame this as a surge.`;
+  }
   if (t.includes("drop"))
     return `Your observed orders (${observed}) are ${dev}. A ${strength.toFixed(1)}× drop signal indicates demand erosion that a recovery offer can reverse before it becomes a sustained trend.`;
   if (t.includes("cart"))
@@ -221,7 +230,7 @@ export default function OutputPanel({
   const lines = output.message.split("\n").filter(Boolean);
   const actionLine = lines[0] ?? "";
   const { trigger, opportunity, strategy } = extractTriggerContext(output.rationale ?? []);
-  const triggerContext = triggerContextSentence(trigger);
+  const triggerContext = triggerContextSentence(trigger, triggerStrength);
   const causalWhy = causalWhySentence(trigger, observedValue, baselineValue, triggerStrength);
   const { low: impactLow, high: impactHigh } = impactRange(triggerStrength, category);
   const basisLine = decisionBasisLine(triggerStrength, category);
