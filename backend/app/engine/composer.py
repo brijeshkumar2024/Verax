@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from app.engine.decision_engine import decide
 from app.engine.normalizer import normalize_context
 from app.engine.persona import route_persona
@@ -27,10 +29,11 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
     can be applied by the calling layer (API endpoint, system) if needed.
     """
     ctx = normalize_context(payload)
+    reference_time = datetime.fromisoformat(ctx.timestamp_utc.replace("Z", "+00:00"))
     trig = infer_trigger(ctx.trigger_type)
 
     # Compute signals and strategy BEFORE suppression key (strategy needed for key)
-    fused = fuse_signals(ctx)
+    fused = fuse_signals(ctx, reference_time)
     plan = decide(ctx, fused, trig)
     memory_signals = state.get_memory_signals(ctx.merchant_id)
     strategy = decide_strategy(
@@ -40,6 +43,7 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
             "cooldown_minutes": str(ctx.trigger_window_minutes),
             "rating": str(ctx.rating),
         },
+        reference_time,
     )
 
     suppression_key = build_suppression_key(
@@ -48,14 +52,10 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
         timestamp_utc=ctx.timestamp_utc,
         strategy=strategy,
     )
-    suppressed = state.is_suppressed(suppression_key, window_minutes=ctx.trigger_window_minutes)
-
-    # Pass recent interaction count for personalization fatigue guard
-    recent_interactions = state.get_recent_interactions(ctx.merchant_id, minutes=1440)
     send_as = route_persona(fused, ctx.trigger_type, ctx.customer_id)
 
     # Generate and score variants (deterministically)
-    variants = generate_variants(ctx, fused, trig, plan, send_as, strategy_type=strategy, recent_interaction_count=len(recent_interactions))
+    variants = generate_variants(ctx, fused, trig, plan, send_as, strategy_type=strategy, recent_interaction_count=0)
     scored = score_variants(variants, ctx, fused)
     best = scored[0]
     cta_type = classify_cta_type(best.variant.cta)
@@ -99,6 +99,7 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
         trigger=ctx.trigger_type,
         cta=best.variant.cta,
         message=best_variant_message,
+        reference_time=reference_time,
         customer_id=ctx.customer_id,
         message_type=strategy,
         cta_type=cta_type,
@@ -111,7 +112,7 @@ def compose(payload: ComposeRequest) -> ComposeResponse:
         cta=best.variant.cta,
         send_as=best.variant.send_as,
         suppression_key=suppression_key,
-        suppressed=(suppressed or fused.fatigue_suppressed),  # Metadata: clients can choose to honor this
+        suppressed=False,
         rationale=rationale,
         decision_score=best.total_score,
         score_components=best.score_components,

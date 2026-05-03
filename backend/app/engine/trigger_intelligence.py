@@ -48,4 +48,4 @@ TRIGGER_MAP: dict[str, TriggerMeaning] = {
 
 
 def infer_trigger(trigger_type: str) -> TriggerMeaning:
-    return TRIGGER_MAP[trigger_type]
+    return TRIGGER_MAP.get(trigger_type, TRIGGER_MAP["spike"])

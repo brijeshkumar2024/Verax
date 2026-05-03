@@ -64,14 +64,14 @@ python test_fixes.py
 ```
 
 ### 3️⃣ Suppression as Metadata
-**Behavior**: Message never changes when suppressed; client decides action
+**Behavior**: Suppression is emitted as metadata only; repeated identical ticks stay identical
 
 ```json
 {
   "message": "165 people can convert today...",  // Same message always
   "cta": "Enable a 12% dinner push today?",
   "decision_score": 81,
-  "suppressed": false,  // ← Metadata flag (doesn't change message)
+  "suppressed": false,  // ← Metadata flag only
   "rationale": [...]
 }
 ```
@@ -82,7 +82,7 @@ python test_fixes.py
 - Animated circular progress score indicator (color-coded)
 - Hero message card with highlighted ₹ values
 - Rationale chips with staggered entrance
-- Suppression warning badge when active
+- Suppression metadata badge for downstream handling
 
 ### 5️⃣ Enhanced Rationale
 **Format**: Clear emoji-based decision breakdown
@@ -238,7 +238,7 @@ Success:     #21D978
 
 ### Determinism
 - 100% deterministic routing (no randomness)
-- Repeatable suppression window logic (TTL-based)
+- Stable suppression key generation for downstream handling
 - Lexicographic tiebreaker for exact reproducibility
 
 ### Score Distribution (Improved)

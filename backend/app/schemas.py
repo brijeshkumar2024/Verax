@@ -130,11 +130,6 @@ class ContextEnvelope(BaseModel):
         return ContextRequest(merchant_id=mid, memory={str(k): str(v) for k, v in self.payload.items()})
 
 
-class TickRequest(BaseModel):
-    merchant_id: str
-    trigger: TriggerType
-
-
 class ReplyRequest(BaseModel):
     model_config = {"extra": "ignore"}
     merchant_id: str

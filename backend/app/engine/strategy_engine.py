@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Literal
-
-from app.config import DETERMINISTIC_MODE
-
 
 StrategyType = Literal["urgency", "discount", "info", "social_proof", "trust_recovery"]
 
@@ -36,7 +33,7 @@ def _is_within_cooldown(last_sent_at: str, cooldown_minutes: int, now: datetime)
     return elapsed_min < cooldown_minutes
 
 
-def decide_strategy(memory: dict[str, str], current_context: dict[str, str]) -> StrategyType:
+def decide_strategy(memory: dict[str, str], current_context: dict[str, str], reference_time: datetime) -> StrategyType:
     trigger_type = current_context.get("trigger_type", "")
     last_response = memory.get("last_response", "ignored")
     last_message_type = memory.get("last_message_type", "info")
@@ -63,12 +60,8 @@ def decide_strategy(memory: dict[str, str], current_context: dict[str, str]) -> 
     if target == last_message_type:
         return _rotate_strategy(target)
 
-    if DETERMINISTIC_MODE:
-        return target  # type: ignore[return-value]
-
-    now = datetime.now(timezone.utc)
     last_sent_at = memory.get("last_sent_at", "")
-    if target == "urgency" and _is_within_cooldown(last_sent_at, cooldown_minutes, now):
+    if target == "urgency" and _is_within_cooldown(last_sent_at, cooldown_minutes, reference_time):
         return "info"
 
     return target  # type: ignore[return-value]

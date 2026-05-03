@@ -6,8 +6,6 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Deque, Dict, List, Optional
 
-from app.config import DETERMINISTIC_MODE
-
 
 @dataclass
 class Interaction:
@@ -51,19 +49,18 @@ class InMemoryState:
         trigger: str,
         cta: str,
         message: str,
+        reference_time: datetime,
         customer_id: Optional[str] = None,
         message_type: str = "info",
         cta_type: str = "explore",
         response: str = "ignored",
     ) -> None:
-        if DETERMINISTIC_MODE:
-            return
         with self._lock:
-            now = datetime.now(timezone.utc)
+            timestamp = reference_time
             memory = self._merchant_state[merchant_id]
             memory.interactions.append(
                 Interaction(
-                    timestamp=now,
+                    timestamp=timestamp,
                     trigger=trigger,
                     cta=cta,
                     message=message,
@@ -76,10 +73,11 @@ class InMemoryState:
             memory.last_message_type = message_type
             memory.last_cta_type = cta_type
             memory.last_response = response
-            memory.last_sent_at = now
+            memory.last_sent_at = timestamp
 
-    def get_recent_interactions(self, merchant_id: str, minutes: int = 1440) -> List[Interaction]:
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+    def get_recent_interactions(self, merchant_id: str, minutes: int = 1440, reference_time: Optional[datetime] = None) -> List[Interaction]:
+        now = reference_time or datetime.fromtimestamp(0, timezone.utc)
+        cutoff = now - timedelta(minutes=minutes)
         with self._lock:
             return [i for i in self._merchant_state[merchant_id].interactions if i.timestamp >= cutoff]
 
@@ -97,10 +95,8 @@ class InMemoryState:
         with self._lock:
             self._merchant_state[merchant_id].last_response = response
 
-    def is_suppressed(self, suppression_key: str, window_minutes: int) -> bool:
-        if DETERMINISTIC_MODE:
-            return False
-        now = datetime.now(timezone.utc)
+    def is_suppressed(self, suppression_key: str, window_minutes: int, reference_time: datetime) -> bool:
+        now = reference_time
         with self._lock:
             until = self._suppression_windows.get(suppression_key)
             if until and until > now:

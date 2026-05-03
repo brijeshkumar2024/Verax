@@ -266,8 +266,8 @@ export default function OutputPanel({
         >
           <span className="text-amber-400 text-sm mt-0.5">⚠</span>
           <div>
-            <p className="text-amber-400 text-sm font-semibold">Suppression Active</p>
-            <p className="text-xs text-gray-400 mt-0.5">This message was already sent in the current window. Review before re-sending.</p>
+            <p className="text-amber-400 text-sm font-semibold">Suppression Metadata</p>
+            <p className="text-xs text-gray-400 mt-0.5">A suppression key is available for downstream handling.</p>
           </div>
         </motion.div>
       )}

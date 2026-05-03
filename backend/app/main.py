@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -19,6 +20,8 @@ from app.schemas import (
     RuleTrace,
 )
 from app.store.memory_store import state
+
+logger = logging.getLogger(__name__)
 
 _START_TIME = time.time()
 API_VERSION = "api_v3_schema_fixed"
@@ -41,7 +44,7 @@ app.add_middleware(
 @app.get("/version")
 def version() -> dict:
     """Deployment version probe — confirms latest code is running."""
-    return {"version": API_VERSION, "deployed_at": datetime.now(timezone.utc).isoformat()}
+    return {"version": API_VERSION, "deployed_at": datetime.fromtimestamp(time.time(), timezone.utc).isoformat()}
 
 
 @app.get("/v1/healthz")
@@ -49,7 +52,7 @@ def healthz() -> dict:
     return {
         "status": "ok",
         "version": API_VERSION,
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "timestamp_utc": datetime.fromtimestamp(time.time(), timezone.utc).isoformat(),
         "uptime_seconds": round(time.time() - _START_TIME, 1),
         "deterministic": True,
     }
@@ -72,15 +75,16 @@ def metadata() -> MetadataResponse:
             "high_cart_abandon", "low_repeat_rate", "inventory_expiry", "weekend_opportunity",
         ],
         tone_engine={
-            "restaurant": {"voice": "sharp-growth",     "urgency": "today", "cta_style": "table-turn"},
-            "gym":        {"voice": "coach-driven",      "urgency": "now",   "cta_style": "session-book"},
-            "salon":      {"voice": "premium-friendly",  "urgency": "today", "cta_style": "slot-fill"},
-            "dentist":    {"voice": "clinical-trust",    "urgency": "today", "cta_style": "appointment-lock"},
-            "pharmacy":   {"voice": "care-urgent",       "urgency": "now",   "cta_style": "refill-activate"},
+            "restaurant": {"voice": "sharp-growth",    "urgency": "today", "cta_style": "table-turn"},
+            "gym":        {"voice": "coach-driven",     "urgency": "now",   "cta_style": "session-book"},
+            "salon":      {"voice": "premium-friendly", "urgency": "today", "cta_style": "slot-fill"},
+            "dentist":    {"voice": "clinical-trust",   "urgency": "today", "cta_style": "appointment-lock"},
+            "pharmacy":   {"voice": "care-urgent",      "urgency": "now",   "cta_style": "refill-activate"},
         },
         determinism_guarantee=(
             "Same merchant + trigger + customer context always produces identical output. "
-            "No randomness, no temperature, no probabilistic sampling."
+            "No randomness, no temperature, no probabilistic sampling. "
+            "Pure rule-and-score path with stable tie-break ordering."
         ),
         suppression="Per merchant+trigger+strategy+time-slot key. Window configurable via trigger.window_minutes.",
         fatigue_model="Interaction history tracked per merchant. Penalty applied after repeated sends.",
@@ -88,21 +92,12 @@ def metadata() -> MetadataResponse:
 
 
 @app.post("/v1/context")
-async def set_context(request: Request) -> dict:
-    """
-    Accepts both formats:
-    - Challenge: {scope, context_id/identity, version, payload, delivered_at}
-    - Legacy:    {merchant_id, memory}
-    """
-    body: dict[str, Any] = await request.json()
-
-    # Detect challenge envelope format by presence of context_id or identity
-    if "context_id" in body or "identity" in body:
-        env = ContextEnvelope.model_validate(body)
-        req = env.to_context_request()
+def set_context(payload: ContextEnvelope | ContextRequest) -> dict:
+    """Accepts both challenge envelope format and legacy merchant_id format."""
+    if isinstance(payload, ContextEnvelope):
+        req = payload.to_context_request()
     else:
-        req = ContextRequest.model_validate(body)
-
+        req = payload
     state.set_context(req.merchant_id, {str(k): str(v) for k, v in req.memory.items()})
     return {
         "accepted": True,
@@ -119,7 +114,7 @@ def tick(payload: ComposeRequest) -> ComposeResponse:
 
     DETERMINISM GUARANTEE:
     - Same merchant + trigger + customer context always produces same decision.
-    - Suppression returned as metadata only.
+    - Suppression returned as metadata only — does not alter the decision.
     - Trigger aliases accepted (e.g. 'dip', 'festival', 'refill_reminder').
     """
     try:
@@ -129,175 +124,6 @@ def tick(payload: ComposeRequest) -> ComposeResponse:
     except ValueError:
         payload.trigger.type = "spike"  # type: ignore
         result = compose(payload)
-        fallback_trace = RuleTrace(
-            trigger_type=f"unknown→spike",
-            dominant_signal=result.rule_trace.dominant_signal,
-            priority=result.rule_trace.priority,
-            strategy=result.rule_trace.strategy,
-            deviation_pct=result.rule_trace.deviation_pct,
-            intent_score=result.rule_trace.intent_score,
-            urgency_score=result.rule_trace.urgency_score,
-        )
-        return result.model_copy(update={"rule_trace": fallback_trace})
-    except Exception as e:
-        print(f"VERAX TICK ERROR: {e}")
-        return ComposeResponse(
-            message="High demand detected. A targeted offer can capture this window today.",
-            cta="Want me to send them a quick offer now?",
-            send_as="system",
-            suppression_key="fallback",
-            suppressed=False,
-            rationale="Fallback decision triggered | Edge case input detected | Safe default applied",
-            decision_score=50,
-            score_components={"decision_quality": 5, "specificity": 5, "category_fit": 5, "merchant_fit": 5, "engagement": 5},
-            rule_trace=RuleTrace(
-                trigger_type="fallback", dominant_signal="demand",
-                priority="capture-demand-now", strategy="urgency",
-                deviation_pct=0.0, intent_score=50, urgency_score=50,
-            ),
-        )
-
-
-@app.post("/v1/reply")
-def reply(payload: ReplyRequest) -> dict:
-    """Record merchant reply to update tone preference and response memory."""
-    lowered = payload.reply_text.lower()
-    tone = "soft" if any(k in lowered for k in ["later", "not now", "stop"]) else "direct"
-    if any(k in lowered for k in ["yes", "ok", "do it", "go ahead", "approved", "sure"]):
-        response = "accepted"
-    elif any(k in lowered for k in ["stop", "no", "don't", "reject", "never"]):
-        response = "rejected"
-    elif any(k in lowered for k in ["later", "not now", "maybe", "confused", "what", "?"]):
-        response = "deferred"
-    else:
-        response = "ignored"
-
-    state.set_context(payload.merchant_id, {"preferred_tone": tone})
-    state.set_last_response(payload.merchant_id, response)
-
-    strategy_shift = {
-        "accepted": "next_strategy=urgency (reinforce momentum)",
-        "rejected": "next_strategy=social_proof (softer re-engage)",
-        "deferred": "next_strategy=info (low-pressure)",
-        "ignored":  "next_strategy=social_proof (rotate to proof)",
-    }
-    next_action_map = {
-        "accepted": "Next decision will reinforce with follow-up offer.",
-        "rejected": "Next decision will use softer tone and longer cooldown.",
-        "deferred": "Next decision will use softer messaging after delay.",
-        "ignored":  "Strategy will rotate to social_proof on next tick.",
-    }
-
-    return {
-        "status": "reply_recorded",
-        "merchant_id": payload.merchant_id,
-        "interpreted_response": response,
-        "tone_updated": tone,
-        "next_action": next_action_map[response],
-        "state_delta": {
-            "preferred_tone": tone,
-            "last_response": response,
-            "strategy_effect": strategy_shift[response],
-        },
-    }
-
-
-
-@app.get("/v1/healthz")
-def healthz() -> dict:
-    return {
-        "status": "ok",
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "uptime_seconds": round(time.time() - _START_TIME, 1),
-        "deterministic": True,
-    }
-
-
-@app.get("/v1/metadata")
-def metadata() -> MetadataResponse:
-    return MetadataResponse(
-        name="VERAX Deterministic Decision Engine",
-        version="1.0.0",
-        deterministic=True,
-        latency_target_ms=300,
-        supported_categories=["restaurant", "gym", "salon", "dentist", "pharmacy"],
-        supported_triggers=[
-            "spike",
-            "drop",
-            "high_cart_abandon",
-            "low_repeat_rate",
-            "new_competitor",
-            "rating_dip",
-            "inventory_expiry",
-            "weekend_opportunity",
-        ],
-        trigger_priority_order=[
-            "spike", "drop", "new_competitor", "rating_dip",
-            "high_cart_abandon", "low_repeat_rate", "inventory_expiry", "weekend_opportunity",
-        ],
-        tone_engine={
-            "restaurant": {"voice": "sharp-growth", "urgency": "today", "cta_style": "table-turn"},
-            "gym":        {"voice": "coach-driven",  "urgency": "now",   "cta_style": "session-book"},
-            "salon":      {"voice": "premium-friendly", "urgency": "today", "cta_style": "slot-fill"},
-            "dentist":    {"voice": "clinical-trust", "urgency": "today", "cta_style": "appointment-lock"},
-            "pharmacy":   {"voice": "care-urgent",   "urgency": "now",   "cta_style": "refill-activate"},
-        },
-        determinism_guarantee=(
-            "Same merchant + trigger + customer context always produces identical output. "
-            "No randomness, no temperature, no probabilistic sampling. "
-            "Pure rule-and-score path with stable tie-break ordering."
-        ),
-        suppression="Per merchant+trigger+time-slot key. Window configurable via trigger.window_minutes.",
-        fatigue_model="Interaction history tracked per merchant. Penalty applied after repeated sends.",
-    )
-
-
-@app.post("/v1/context")
-def set_context(payload: ContextEnvelope | ContextRequest) -> dict:
-    """Accepts both challenge envelope format and legacy merchant_id format."""
-    if isinstance(payload, ContextEnvelope):
-        req = payload.to_context_request()
-    else:
-        req = payload
-    state.set_context(req.merchant_id, req.memory)
-    return {
-        "status": "context_updated",
-        "merchant_id": req.merchant_id,
-        "keys_set": list(req.memory.keys()),
-    }
-
-
-@app.post("/v1/tick")
-def tick(payload: ComposeRequest) -> ComposeResponse:
-    """
-    Main compose decision endpoint.
-
-    DETERMINISM GUARANTEE:
-    - Same merchant + trigger + customer context always produces same decision.
-    - Suppression returned as metadata only — does not alter the decision.
-    - Trigger aliases accepted (e.g. 'dip', 'festival', 'refill_reminder').
-    """
-    try:
-        normalized_trigger = normalize_trigger(payload.trigger.type)
-        normalized_payload = ComposeRequest(
-            category=payload.category,
-            merchant=payload.merchant,
-            trigger=payload.trigger,
-            customer=payload.customer,
-        )
-        normalized_payload.trigger.type = normalized_trigger  # type: ignore
-        return compose(normalized_payload)
-    except ValueError as e:
-        # Unknown trigger — fall back to spike (highest priority) and note in trace
-        normalized_payload = ComposeRequest(
-            category=payload.category,
-            merchant=payload.merchant,
-            trigger=payload.trigger,
-            customer=payload.customer,
-        )
-        normalized_payload.trigger.type = "spike"  # type: ignore
-        result = compose(normalized_payload)
-        # Annotate rule trace to show fallback was applied
         fallback_trace = RuleTrace(
             trigger_type=f"unknown({payload.trigger.type})→spike",
             dominant_signal=result.rule_trace.dominant_signal,
@@ -309,7 +135,7 @@ def tick(payload: ComposeRequest) -> ComposeResponse:
         )
         return result.model_copy(update={"rule_trace": fallback_trace})
     except Exception as e:
-        print(f"VERAX TICK ERROR: {e}")
+        logger.error("VERAX TICK ERROR: %s", e, exc_info=True)
         return ComposeResponse(
             message="High demand detected. A targeted offer can capture this window today.",
             cta="Want me to send them a quick offer now?",
@@ -348,18 +174,17 @@ def reply(payload: ReplyRequest) -> dict:
     state.set_context(payload.merchant_id, {"preferred_tone": tone})
     state.set_last_response(payload.merchant_id, response)
 
-    # state_delta: shows judge exactly what changed and what next tick will do differently
     strategy_shift = {
-        "accepted":  "next_strategy=urgency (reinforce momentum)",
-        "rejected":  "next_strategy=social_proof (softer re-engage)",
-        "deferred":  "next_strategy=info (low-pressure)",
-        "ignored":   "next_strategy=social_proof (rotate to proof)",
+        "accepted": "next_strategy=urgency (reinforce momentum)",
+        "rejected": "next_strategy=social_proof (softer re-engage)",
+        "deferred": "next_strategy=info (low-pressure)",
+        "ignored":  "next_strategy=social_proof (rotate to proof)",
     }
     next_action_map = {
-        "accepted":  "Next decision will reinforce with follow-up offer.",
-        "rejected":  "Next decision will use softer tone and longer cooldown.",
-        "deferred":  "Next decision will use softer messaging after delay.",
-        "ignored":   "Strategy will rotate to social_proof on next tick.",
+        "accepted": "Next decision will reinforce with follow-up offer.",
+        "rejected": "Next decision will use softer tone and longer cooldown.",
+        "deferred": "Next decision will use softer messaging after delay.",
+        "ignored":  "Strategy will rotate to social_proof on next tick.",
     }
 
     return {

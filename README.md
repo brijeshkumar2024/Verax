@@ -111,12 +111,12 @@ Every decision includes trigger reasoning, merchant context, strategy selection,
 
 Raw category labels never appear in output — always contextual nouns.
 
-### 5. Suppression and Fatigue Control
+### 5. Suppression Key and Reply Memory
 Suppression key format: `merchant_id:trigger:strategy:timeslot`
 
-- Prevents duplicate messages within the same window
-- Strategy rotates after repeated sends (urgency → discount → social_proof)
-- Fatigue penalty reduces intent/urgency scores after high interaction volume
+- Emitted as metadata only; it does not change the `/v1/tick` response
+- `POST /v1/reply` is the deterministic stateful input that can change the next tick
+- Interaction history is tracked for explainability and downstream handling
 
 ### 6. Stateful Reply Intelligence
 `POST /v1/reply` interprets merchant responses:

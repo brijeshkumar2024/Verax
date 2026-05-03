@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 from typing import List
 
 from app.engine.decision_engine import DecisionPlan
 from app.engine.tone import get_tone
 from app.engine.trigger_intelligence import TriggerMeaning
 from app.engine.types import FusedSignals, NormalizedContext, Variant
+
+
+def _stable_hash(value: str, mod: int) -> int:
+    """MD5-based hash — stable across Python processes and deployments."""
+    return int(hashlib.md5(value.encode()).hexdigest(), 16) % mod
 
 
 def _message_type_for(strategy: str) -> str:
@@ -28,12 +34,13 @@ def enforce_message_rules(msg: str) -> str:
 # Urgency closers — rotated deterministically to avoid "now?" overuse
 _CLOSERS = ["now?", "right away?", "today?"]
 
-# Demand phrase pool — keyed by merchant_id hash for natural variation without randomness
+# Demand phrase pool — keyed by stable_hash for natural variation without randomness
 _DEMAND_PHRASES = ["high-intent buyers", "nearby customers", "ready-to-order users"]
 
 
 def _demand_phrase(merchant_id: str) -> str:
-    return _DEMAND_PHRASES[hash(merchant_id) % len(_DEMAND_PHRASES)]
+    return _DEMAND_PHRASES[_stable_hash(merchant_id, len(_DEMAND_PHRASES))]
+
 
 # Category-specific action verbs for CTA precision
 _CTA_VERB: dict[str, str] = {
@@ -48,9 +55,9 @@ _CTA_VERB: dict[str, str] = {
 
 def _discount_amount(aov: float, promo_pct: int, strategy_type: str = "info") -> int:
     """Rupee discount = AOV × strategy-aware rate, rounded to nearest ₹5."""
-    if strategy_type in {"urgency", "social_proof"}:   # capture-demand: lighter touch
+    if strategy_type in {"urgency", "social_proof"}:
         rate = max(promo_pct, 8) / 100
-    elif strategy_type in {"discount", "trust_recovery", "info"}:  # recovery: stronger pull
+    elif strategy_type in {"discount", "trust_recovery", "info"}:
         rate = max(promo_pct, 12) / 100
     else:
         rate = max(promo_pct, 15) / 100
@@ -73,8 +80,8 @@ def _cta_for(
     closer = _CLOSERS[cta_variant % 3]
     verb_tpl = _CTA_VERB.get(tone_voice, "send them a ₹{p} off deal")
     verb = verb_tpl.replace("{p}", str(discount))
-    # CTA phrase pool — deterministic pick by strategy + merchant_id
-    _cta_pool_idx = hash(strategy_type + merchant_id) % 3
+    # CTA phrase pool — stable deterministic pick by strategy + merchant_id
+    _cta_pool_idx = _stable_hash(strategy_type + merchant_id, 3)
 
     if trigger_type == "rating_dip":
         _pool = [
@@ -93,12 +100,13 @@ def _cta_for(
         return "soft_nudge", _pool[_cta_pool_idx]
 
     if trigger_type == "spike":
+        spike_idx = (_stable_hash(strategy_type + merchant_id, 3) + cta_variant) % 3
         _variants = [
             f"Want me to {verb} {closer}",
             f"Want me to push a ₹{discount} off deal before the window closes?",
             f"Want me to capture them with a ₹{discount} off deal {closer}",
         ]
-        return "push_now", _variants[cta_variant % 3]
+        return "push_now", _variants[spike_idx]
 
     if trigger_type == "drop":
         _variants = [
@@ -125,7 +133,7 @@ def _cta_for(
 # ---------------------------------------------------------------------------
 # Category × trigger template library
 # 3 natural line1 strings per (category, trigger_type)
-# Picked by hash(merchant_id + trigger_type) % 3 — fully deterministic
+# Picked by _stable_hash(merchant_id + trigger_type, 3) — fully deterministic
 # Rules: opens with number/fact, no greeting, category-specific language
 # ---------------------------------------------------------------------------
 _TEMPLATES: dict[tuple[str, str], list[str]] = {
@@ -350,25 +358,11 @@ def _get_line1(
             f"Right now, {n} buyers in {city} are looking for a deal.",
             f"{n} active buyers in {city} are ready to convert today.",
         ]
-    idx = hash(merchant_id + tkey) % 3
+    idx = _stable_hash(merchant_id + tkey, 3)
     line = templates[idx].format(n=n, city=city)
     if customer_prefix:
         line = customer_prefix + line[0].lower() + line[1:]
     return line.strip()
-
-
-def _line2(priority: str, city: str, trigger_label: str) -> str:
-    if priority == "capture-demand-now":
-        return f"Demand signal: {trigger_label} in {city}; act now to secure top intent."
-    if priority == "recover-repeat-demand":
-        return f"Retention risk in {city}: {trigger_label}; recover repeat demand today."
-    if priority == "repair-trust-and-convert":
-        return f"Trust risk in {city}: {trigger_label}; steady conversion today."
-    if priority == "protect-wasting-inventory":
-        return f"Inventory pressure in {city}: {trigger_label}; protect margin now."
-    if priority == "defend-market-share":
-        return f"Competition rise in {city}: {trigger_label}; defend share today."
-    return f"Peak window in {city}: {trigger_label}; convert attention now."
 
 
 def generate_variants(
@@ -382,9 +376,7 @@ def generate_variants(
 ) -> List[Variant]:
     tone = get_tone(ctx.category)
     has_strong_offer = plan.promo_pct >= 14
-    estimated_value = plan.estimated_revenue
     message_type = _message_type_for(strategy_type)
-    # Compute meaningful rupee discount: strategy-aware AOV × rate, rounded to nearest ₹5
     discount = _discount_amount(ctx.aov, plan.promo_pct, strategy_type)
     demand_phrase = _demand_phrase(ctx.merchant_id)
 
@@ -411,11 +403,11 @@ def generate_variants(
     _,         cta1 = _cta(1)
     _,         cta2 = _cta(2)
 
-    # 3 deterministic line1 variants — category+trigger specific, picked by hash
+    # 3 deterministic line1 variants — each seeded with a different stable suffix
     line1_variants = [
-        _get_line1(ctx.category, ctx.trigger_type, ctx.merchant_id, plan.estimated_customers, ctx.city, customer_prefix),
-        _get_line1(ctx.category, ctx.trigger_type, ctx.merchant_id + "_v2", plan.estimated_customers, ctx.city, ""),
-        _get_line1(ctx.category, ctx.trigger_type, ctx.merchant_id + "_v3", plan.estimated_customers, ctx.city, ""),
+        _get_line1(ctx.category, ctx.trigger_type, ctx.merchant_id + ":v0", plan.estimated_customers, ctx.city, customer_prefix),
+        _get_line1(ctx.category, ctx.trigger_type, ctx.merchant_id + ":v1", plan.estimated_customers, ctx.city, ""),
+        _get_line1(ctx.category, ctx.trigger_type, ctx.merchant_id + ":v2", plan.estimated_customers, ctx.city, ""),
     ]
 
     def _make_variant(line1: str, cta: str, rationale_items: list[str]) -> Variant:

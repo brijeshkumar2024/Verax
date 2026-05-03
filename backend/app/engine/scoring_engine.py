@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import List
 
 from app.engine.anti_pattern import anti_pattern_check
@@ -18,9 +19,7 @@ CATEGORY_KEYWORDS = {
 def _specificity(message: str) -> int:
     """Calculate message specificity (higher = more concrete numbers and urgency)."""
     score = 20
-    
-    # Count numeric sequences (higher precision = more points)
-    import re
+
     numbers = re.findall(r'\d+', message)
     if numbers:
         score += 25 + min(10, len(numbers) * 2)  # Bonus for multiple numbers

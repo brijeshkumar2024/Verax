@@ -6,7 +6,8 @@ Tests all critical fixes: CORS, Determinism, Currency, Trigger Normalization, Su
 
 import json
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import time
 from typing import Any
 
 # Add project to path
@@ -69,7 +70,7 @@ def test_currency_formatting() -> bool:
             "observed_value": 250,
             "baseline_value": 150,
             "window_minutes": 180,
-            "timestamp_utc": datetime.utcnow().isoformat() + "Z",
+            "timestamp_utc": datetime.fromtimestamp(time.time(), timezone.utc).isoformat().replace("+00:00", "Z"),
         },
         "customer": {
             "customer_id": "c_001",
@@ -284,7 +285,7 @@ def main() -> None:
     """Run all tests."""
     print("\n" + "="*70)
     print("VERAX PRODUCTION VALIDATION SUITE")
-    print(f"Timestamp: {datetime.utcnow().isoformat()}Z")
+    print(f"Timestamp: {datetime.fromtimestamp(time.time(), timezone.utc).isoformat().replace('+00:00', 'Z')}")
     print("="*70)
     
     tests = [
